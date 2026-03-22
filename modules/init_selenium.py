@@ -7,6 +7,7 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
 from config.settings import user_name, password, captcha
 import time
+import re
 
 class InitSelenium:
       def init_selenium(self):
@@ -102,38 +103,54 @@ class InitSelenium:
                   button_find.click()
             except Exception as e:
                   print(f"Không tìm thấy nút tìm môn học, lỗi {e}")
-            driver.switch_to.new_window('tab')
-            driver.get("https://lms.oude.edu.vn/251/course/view.php?id=608")
-            # try:
-            #       list_subject = WebDriverWait(driver, 10).until(
-            #             EC.presence_of_all_elements_located((By.CLASS_NAME, "aalink"))
-            #       )
+      
+            try:
+                  list_subject = WebDriverWait(driver, 10).until(
+                        EC.presence_of_all_elements_located((By.CLASS_NAME, "aalink"))
+                  )
                   
-                  # main_tab = driver.current_window_handle
-                  # for sb in list_subject:
-                  #       print(sb.get_attribute("href"))
-                  #       driver.switch_to.new_window('tab')
-                  #       driver.get(sb.get_attribute("href"))
+                  main_tab = driver.current_window_handle
+                  # đưa các link vào list, vì nếu dùng trực tiếp sb.get_attribute("href")
+                  # trong for, khi mở tab mới sẽ không thấy link
+                  list_link_subject = [sb.get_attribute("href") for sb in list_subject]
+                  for link_subject in list_link_subject:
+                        driver.switch_to.new_window('tab')
+                        driver.get(link_subject)
 
-                        # btn_read_more = WebDriverWait(driver, 10).until(
-                        #       EC.element_to_be_clickable((By.LINK_TEXT, "Xem thêm"))
-                        # )
-                        # btn_read_more.click()
+                        try:
+                              btn_read_more = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.LINK_TEXT, "Xem thêm"))
+                              )
+                              btn_read_more.click()
+                        except Exception as e:
+                              print(f"Không mở được nút xem thêm, lỗi {e}")  
 
-                        # btn_update_student = WebDriverWait(driver, 10).until(
-                        #       EC.element_to_be_clickable((By.LINK_TEXT, "Xem thêm"))
-                        # )
-                        # btn_update_student.click()
+                        try:
+                              btn_update_student = WebDriverWait(driver, 10).until(
+                                    EC.element_to_be_clickable((By.LINK_TEXT, "Cập nhật DSSV từ hệ thống QLĐT"))
+                              )
+                              btn_update_student.click()
+                        except Exception as e:
+                              print(f"Không mở được nút cập nhật sinh viên, lỗi {e}")  
 
-                        # div_annoucement = WebDriverWait(driver, 10).until(
-                        #       EC.visibility_of_element_located((By.XPATH, "//div[contains(., 'Đã ghi danh')]"))
-                        # )
-                        # print(div_annoucement.text)
-                        # driver.close() 
+                        try:
+                              div_annoucement = WebDriverWait(driver, 10).until(
+                                    EC.visibility_of_element_located((By.XPATH, "//div[contains(text(), 'Đã ghi danh')]"))
+                              )
+                              text = driver.execute_script("""
+                              return arguments[0].childNodes[0].nodeValue;
+                              """, div_annoucement) # vì trong div cần lây có các node con, chỉ cần lấy text của lớp cha
+                              text = text.strip().replace('\n', ' ') #Đã ghi danh 0/25 sinh viên vào khóa học.
+                              numbers = re.findall(r'\d+', text) #[0, 27]
+                              print(numbers)
+                        except Exception as e:
+                              print(f"Không xuất ra số sinh viên cập nhật, lỗi {e}")  
 
-                  #driver.switch_to.window(main_tab) 
-            # except Exception as e:
-            #       print(f"Không tìm thấy nút tìm môn học, lỗi {e}")  
+                        driver.close() 
+                        driver.switch_to.window(main_tab) 
+                  
+            except Exception as e:
+                  print(f"Không mở được tab mới, lỗi {e}")  
 
             
             
