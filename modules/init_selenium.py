@@ -23,6 +23,7 @@ class InitSelenium:
             driver = webdriver.Chrome()
             return driver
       
+
       def login_selenium(self, url):
             driver = self.init_selenium()
             driver.get(url)
@@ -88,6 +89,64 @@ class InitSelenium:
                   print(f"Không tìm thấy nút cho phép nhấn đồng ý, lỗi {e}")
 
             return driver
+      
 
+      def process_detail_subject(self, semester, url_lsa):
+            driver =self. login_selenium(url_lsa)
+
+            try:
+                  dropdown_semester = WebDriverWait(driver, 15).until(
+                  EC.presence_of_element_located((By.ID, "moodlesiteid"))
+                  )
+                  select_type_semester = Select(dropdown_semester)
+                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS ĐTTX", semester]))
+                  
+            except Exception as e:
+                  print(f"Không tìm thấy dropdownlist thể hiện học kỳ, lỗi {e}")
+
+            try:
+                  driver.execute_script("arguments[0].style.display='block';", driver.find_element(By.ID, "menu_1_sub"))
+                  overview_link = WebDriverWait(driver, 20).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href*='usersiteoverviews']"))
+                  )
+                  overview_link.click()
+            except Exception as e:
+                  print(f"Không tìm thấy nút report, lỗi {e}")
+
+            try:
+                  table = WebDriverWait(driver, 40).until(
+                        EC.presence_of_element_located((By.ID, "ourptlistcourse"))  # Thay "myTable" bằng ID thực tế
+                  )
+            except Exception as e:
+                  print(f"Không tìm thấy bảng, lỗi {e}")
+
+            try:
+                  rows = WebDriverWait(driver, 20).until(
+                        EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
+                  )
+            except Exception as e:
+                  print(f"Không tìm thấy các dòng, lỗi {e}")
             
-            
+            get_subject = []
+            try:
+                  for row in rows:
+                        cells = row.find_elements(By.XPATH, ".//td")
+                        temp = []
+                        for i, cell in enumerate(cells):
+                              get_value = cell.splitlines()
+                              for i, vals in enumerate(get_value):
+                                    if vals.startswith("[" + semester + "]"):
+                                          temp.append(get_value[i - 1]) # gắn giá trị id môn học trên lsa
+                                          pattern = r"\[{0}\]\s+(\w+)\s+-.*\((\w+)-(\w+)\)".format(semester)
+                                          match = re.search(pattern, vals)
+                                          if match:
+                                                # group1: FINA2343, group2: KT196, group3: TN303
+                                                temp.extend([match.group(1), match.group(2), match.group(3)])
+                                          elif vals.startswith("Giảng viên"):
+                                                temp.append(vals.split(". ", 1)[-1].strip()) # tên giảng viên
+
+                              print(F"{i}: {cell.text}")
+            except Exception as e:
+                  print(f"Không xuất được nội dung từng ô trong bảng, lỗi {e}")
+
+      

@@ -17,53 +17,6 @@ class UpdateStudents:
             self.url_lms = f"https://lms.oude.edu.vn/{self.config.get_attr("SEMESTER")}/course/search.php"
             self.url_lsa = f"http://lsa.ou.edu.vn/auth/login"
 
-      def process_detail_subject(self):
-            start_selenium = InitSelenium()
-            driver = start_selenium.login_selenium(self.url_lsa)
-
-            try:
-                  dropdown_semester = WebDriverWait(driver, 15).until(
-                  EC.presence_of_element_located((By.ID, "moodlesiteid"))
-                  )
-                  select_type_semester = Select(dropdown_semester)
-                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS ĐTTX", str(self.config.get_attr("SEMESTER"))]))
-                  
-            except Exception as e:
-                  print(f"Không tìm thấy dropdownlist thể hiện học kỳ, lỗi {e}")
-
-            try:
-                  driver.execute_script("arguments[0].style.display='block';", driver.find_element(By.ID, "menu_1_sub"))
-                  overview_link = WebDriverWait(driver, 20).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href*='usersiteoverviews']"))
-                  )
-                  overview_link.click()
-            except Exception as e:
-                  print(f"Không tìm thấy nút report, lỗi {e}")
-
-            try:
-                  table = WebDriverWait(driver, 40).until(
-                        EC.presence_of_element_located((By.ID, "ourptlistcourse"))  # Thay "myTable" bằng ID thực tế
-                  )
-            except Exception as e:
-                  print(f"Không tìm thấy bảng, lỗi {e}")
-
-            try:
-                  rows = WebDriverWait(driver, 20).until(
-                        EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
-                  )
-            except Exception as e:
-                  print(f"Không tìm thấy các dòng, lỗi {e}")
-
-            try:
-                  get_subject = []
-                  for row in rows:
-                        cells = row.find_elements(By.XPATH, ".//td")
-                        print('--------------------------')
-                        for i, cell in enumerate(cells):
-                              print(F"{i}: {cell.text}")
-            except Exception as e:
-                  print(f"Không xuất được nội dung từng ô trong bảng, lỗi {e}")
-
 
       def process_update_student(self):
             start_selenium = InitSelenium()
