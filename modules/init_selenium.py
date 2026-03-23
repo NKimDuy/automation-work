@@ -87,70 +87,7 @@ class InitSelenium:
             except Exception as e:
                   print(f"Không tìm thấy nút cho phép nhấn đồng ý, lỗi {e}")
 
-            try:
-                  search_input = WebDriverWait(driver, 10).until(
-                        EC.visibility_of_element_located((By.NAME, "q"))
-                  )
-                  search_input.send_keys("TN120")
-            except Exception as e:
-                  print(f"Không tìm thấy ô nhập môn học, lỗi {e}")
-            
-            try:
-                  button_find_text = "button[type='submit']"
-                  button_find = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, button_find_text))
-                  )
-                  button_find.click()
-            except Exception as e:
-                  print(f"Không tìm thấy nút tìm môn học, lỗi {e}")
-      
-            try:
-                  list_subject = WebDriverWait(driver, 10).until(
-                        EC.presence_of_all_elements_located((By.CLASS_NAME, "aalink"))
-                  )
-                  
-                  main_tab = driver.current_window_handle
-                  # đưa các link vào list, vì nếu dùng trực tiếp sb.get_attribute("href")
-                  # trong for, khi mở tab mới sẽ không thấy link
-                  list_link_subject = [sb.get_attribute("href") for sb in list_subject]
-                  for link_subject in list_link_subject:
-                        driver.switch_to.new_window('tab')
-                        driver.get(link_subject)
-
-                        try:
-                              btn_read_more = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.LINK_TEXT, "Xem thêm"))
-                              )
-                              btn_read_more.click()
-                        except Exception as e:
-                              print(f"Không mở được nút xem thêm, lỗi {e}")  
-
-                        try:
-                              btn_update_student = WebDriverWait(driver, 10).until(
-                                    EC.element_to_be_clickable((By.LINK_TEXT, "Cập nhật DSSV từ hệ thống QLĐT"))
-                              )
-                              btn_update_student.click()
-                        except Exception as e:
-                              print(f"Không mở được nút cập nhật sinh viên, lỗi {e}")  
-
-                        try:
-                              div_annoucement = WebDriverWait(driver, 10).until(
-                                    EC.visibility_of_element_located((By.XPATH, "//div[contains(text(), 'Đã ghi danh')]"))
-                              )
-                              text = driver.execute_script("""
-                              return arguments[0].childNodes[0].nodeValue;
-                              """, div_annoucement) # vì trong div cần lây có các node con, chỉ cần lấy text của lớp cha
-                              text = text.strip().replace('\n', ' ') #Đã ghi danh 0/25 sinh viên vào khóa học.
-                              numbers = re.findall(r'\d+', text) #[0, 27]
-                              print(numbers)
-                        except Exception as e:
-                              print(f"Không xuất ra số sinh viên cập nhật, lỗi {e}")  
-
-                        driver.close() 
-                        driver.switch_to.window(main_tab) 
-                  
-            except Exception as e:
-                  print(f"Không mở được tab mới, lỗi {e}")  
+            return driver
 
             
             
