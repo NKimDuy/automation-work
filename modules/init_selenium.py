@@ -81,7 +81,7 @@ class InitSelenium:
                   print(f"Không tìm thấy nút đăng nhập, lỗi {e}")
 
             try:
-                  button_allow = WebDriverWait(driver, 10).until(
+                  button_allow = WebDriverWait(driver, 5).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-success.btn-approve"))
                   )
                   button_allow.click()
@@ -130,23 +130,30 @@ class InitSelenium:
             get_subject = []
             try:
                   for row in rows:
+                        temp = {}
                         cells = row.find_elements(By.XPATH, ".//td")
-                        temp = []
-                        for i, cell in enumerate(cells):
-                              get_value = cell.splitlines()
-                              for i, vals in enumerate(get_value):
-                                    if vals.startswith("[" + semester + "]"):
-                                          temp.append(get_value[i - 1]) # gắn giá trị id môn học trên lsa
-                                          pattern = r"\[{0}\]\s+(\w+)\s+-.*\((\w+)-(\w+)\)".format(semester)
-                                          match = re.search(pattern, vals)
-                                          if match:
-                                                # group1: FINA2343, group2: KT196, group3: TN303
-                                                temp.extend([match.group(1), match.group(2), match.group(3)])
-                                          elif vals.startswith("Giảng viên"):
-                                                temp.append(vals.split(". ", 1)[-1].strip()) # tên giảng viên
+                        for idx_cell, cell in enumerate(cells):
+                              if cell.text.startswith("[" + semester + "]"):
+                                    temp["lms_id"] = cells[idx_cell - 1].text # gắn giá trị id môn học trên lsa
+                                    temp["count_total_student"] = cells[idx_cell + 2].text
+                                    temp["count_student_access"] = cells[idx_cell + 4].text
+                                    temp["percent_student_access"] = cells[idx_cell + 6].text
+                                    temp["percent_teacher_access"] = cells[idx_cell + 7].text
+                                    pattern = rf"\[{semester}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-(\w+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
+                                    match = re.search(pattern, cell.text, re.DOTALL)
+                                    if match:
+                                          # group1: FINA2343, group2: Tên môn, group3: TN303, group4: tên giảng vien
+                                          temp["subject_id"] = match.group(1)
+                                          temp["subject_name"] = match.group(2)
+                                          temp["teacher_id"] = match.group(3)
+                                          temp["group_id"] = match.group(4)
+                                          temp["teacher_name"] = match.group(5)
 
-                              print(F"{i}: {cell.text}")
+                              # print(F"{idx_cell}: {cell.text}")
+                                    get_subject.append(temp)
+                  return get_subject
             except Exception as e:
                   print(f"Không xuất được nội dung từng ô trong bảng, lỗi {e}")
+            
 
       

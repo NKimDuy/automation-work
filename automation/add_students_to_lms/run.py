@@ -17,6 +17,10 @@ class UpdateStudents:
             self.url_lms = f"https://lms.oude.edu.vn/{self.config.get_attr("SEMESTER")}/course/search.php"
             self.url_lsa = f"http://lsa.ou.edu.vn/auth/login"
 
+      def test(self):
+            start_selenium = InitSelenium()
+            semester = str(self.config.get_attr("SEMESTER"))
+            return start_selenium.process_detail_subject(semester, self.url_lsa)
 
       def process_update_student(self):
             start_selenium = InitSelenium()
@@ -89,5 +93,5 @@ class UpdateStudents:
             except Exception as e:
                   print(f"Không mở được tab mới, lỗi {e}")  
 
-test = UpdateStudents()
-test.process_detail_subject()
+ob = UpdateStudents()
+print(ob.test())
