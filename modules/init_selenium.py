@@ -5,12 +5,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
-from config.settings import user_name, password, captcha
+from config.settings import user_lms, password_lms, captcha
 import time
 import re
 
 class InitSelenium:
       def init_selenium(self):
+            # Hàm khởi tạo trình duyệt với các tùy chọn đã được cấu hình sẵn
             chrome_options = Options()
             chrome_options.add_argument("--headless=new")  # Chế độ headless mới
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")  # Tắt automation
@@ -25,6 +26,7 @@ class InitSelenium:
       
 
       def login_selenium(self, url):
+            # Hàm đăng nhập vào hệ thống bằng selenium, trả về driver đã đăng nhập thành công
             driver = self.init_selenium()
             driver.get(url)
             
@@ -50,7 +52,7 @@ class InitSelenium:
                   username_input = WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.ID, "form-username"))
                   )
-                  username_input.send_keys(user_name)
+                  username_input.send_keys(user_lms)
             except Exception as e:
                   print(f"Không thấy ô nhập tài khoản, lỗi: {e}")    
 
@@ -58,7 +60,7 @@ class InitSelenium:
                   password_input = WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.ID, "form-password"))
                   )
-                  password_input.send_keys(password)
+                  password_input.send_keys(password_lms)
             except Exception as e:
                   print(f"Không thấy ô nhập mật khẩu, lỗi: {e}")    
 
@@ -92,7 +94,8 @@ class InitSelenium:
       
 
       def process_detail_subject(self, semester, url_lsa):
-            driver =self. login_selenium(url_lsa)
+            # truy cập và lấy thông tin chi tiết của từng môn học trên lsa
+            driver =self.login_selenium(url_lsa)
 
             try:
                   dropdown_semester = WebDriverWait(driver, 15).until(
@@ -149,9 +152,9 @@ class InitSelenium:
                                           temp["group_id"] = match.group(4)
                                           temp["teacher_name"] = match.group(5)
 
-                              # print(F"{idx_cell}: {cell.text}")
                                     get_subject.append(temp)
-                  return get_subject
+                  driver.quit()              
+                  return get_subject # [{"lms_id": "123", "subject_id": "FINA2343", "subject_name": "Tài chính doanh nghiệp", "teacher_id": "TN303", "teacher_name": "Nguyễn Văn A", "group_id": "01", ...}, {...}, ...]
             except Exception as e:
                   print(f"Không xuất được nội dung từng ô trong bảng, lỗi {e}")
             
