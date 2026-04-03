@@ -20,6 +20,7 @@ from modules.init_selenium import InitSelenium
 from utils.config_loader import ConfigLoader
 from utils.logger import setup_logger
 from db.connect_mysql import get_connection
+from config.settings import semester
 import os
 import time 
 import re
@@ -27,15 +28,10 @@ import re
 class UpdateStudents:
       def __init__(self):
             """Khởi tạo đối tượng, đọc cấu hình và gán URL cho trình tự chạy."""
-            self.config = ConfigLoader(os.path.join(os.path.dirname(__file__), "config.yaml"))
-            self.url_lms = f"https://lms.oude.edu.vn/{self.config.get_attr('SEMESTER')}/course/search.php"
+            # self.config = ConfigLoader(os.path.join(os.path.dirname(__file__), "config.yaml"))
+            # self.url_lms = f"https://lms.oude.edu.vn/{self.config.get_attr('SEMESTER')}/course/search.php"
+            self.url_lms = f"https://lms.oude.edu.vn/{semester}/course/search.php"
             self.url_lsa = "http://lsa.ou.edu.vn/auth/login"
-
-
-      def test(self):
-          con = get_connection()
-          cursor = con.cursor()
-          print("kết nối thành công")
 
 
       def update_student_lms(self):
@@ -53,19 +49,18 @@ class UpdateStudents:
             - Nếu DB bị lỗi, rollback với từng môn học.
             """
             start_selenium = InitSelenium()
-            semester = str(self.config.get_attr("SEMESTER"))
 
             file_dir = os.path.join(os.path.dirname(__file__), "add_students_to_lms.log")
             # nếu file log đã tồn tại, xóa file cũ để tạo file log mới cho lần chạy hiện tại
             logger = setup_logger(file_dir)
             logger.info("Bắt đầu chạy chương trình cập nhật sinh viên vào LMS")
-            list_subject_lsa = start_selenium.process_detail_subject(semester, self.url_lsa)
+            list_subject_lsa = start_selenium.process_get_detail_lsa(semester, self.url_lsa)
             logger.info(f"Đã lấy được {len(list_subject_lsa)} môn học từ LSA")
 
             # đăng nhập vào LMS và cập nhật sinh viên cho từng môn học
             driver = start_selenium.login_selenium(self.url_lms)
             for one_subject in list_subject_lsa:
-                  driver.get(f"https://lms.oude.edu.vn/{self.config.get_attr("SEMESTER")}/admin/tool/enrolfromextdb/enrollnet.php?id={one_subject["lms_id"]}")
+                  driver.get(f"https://lms.oude.edu.vn/{semester}/admin/tool/enrolfromextdb/enrollnet.php?id={one_subject["lms_id"]}")
                   try:
                         div_annoucement = WebDriverWait(driver, 10).until(
                               EC.visibility_of_element_located((By.XPATH, "//div[contains(text(), 'Đã ghi danh')]"))
