@@ -31,7 +31,6 @@ class UpdateStudents:
             # self.config = ConfigLoader(os.path.join(os.path.dirname(__file__), "config.yaml"))
             # self.url_lms = f"https://lms.oude.edu.vn/{self.config.get_attr('SEMESTER')}/course/search.php"
             self.url_lms = f"https://lms.oude.edu.vn/{semester}/course/search.php"
-            self.url_lsa = "http://lsa.ou.edu.vn/auth/login"
 
 
       def update_student_lms(self):
@@ -54,7 +53,7 @@ class UpdateStudents:
             # nếu file log đã tồn tại, xóa file cũ để tạo file log mới cho lần chạy hiện tại
             logger = setup_logger(file_dir)
             logger.info("Bắt đầu chạy chương trình cập nhật sinh viên vào LMS")
-            list_subject_lsa = start_selenium.process_get_detail_lsa(semester, self.url_lsa)
+            list_subject_lsa = start_selenium.process_get_detail_lsa()
             logger.info(f"Đã lấy được {len(list_subject_lsa)} môn học từ LSA")
 
             # đăng nhập vào LMS và cập nhật sinh viên cho từng môn học

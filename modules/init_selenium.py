@@ -17,6 +17,9 @@ class InitSelenium:
       Chức năng chính: Đăng nhập, lấy thông tin môn học từ LMS và PHDT
       """
       
+      def __init__(self):
+            self.url_lsa = "http://lsa.ou.edu.vn/auth/login"
+
       def init_selenium(self):
             """
             Khởi tạo trình duyệt Chrome với các cấu hình tối ưu
@@ -124,7 +127,7 @@ class InitSelenium:
             return driver
       
 
-      def process_get_detail_lsa(self, semester, url_lsa):
+      def process_get_detail_lsa(self):
             """
             Truy cập LMS và lấy thông tin chi tiết của từng môn học
             Thông tin lấy được:
@@ -144,7 +147,7 @@ class InitSelenium:
               url_lsa (str) - Đường dẫn tới LMS
             Return: list - Danh sách dict chứa thông tin các môn học
             """
-            driver = self.login_selenium(url_lsa)
+            driver = self.login_selenium(self.url_lsa)
 
             # Chọn học kỳ từ dropdown
             try:
