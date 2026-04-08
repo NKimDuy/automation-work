@@ -248,37 +248,43 @@ class InitSelenium:
 
             # Lặp qua từng đơn vị
             for unit in list_unit:
-                  # Truy cập trang thời khóa biểu của đơn vị với học kỳ hiện tại
-                  driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk={"".join(["20", semester])}&madp={unit[0]}")
-                  
-                  # Chờ bảng thời khóa biểu tải
-                  try:
-                        table = WebDriverWait(driver, 40).until(
-                              EC.presence_of_element_located((By.ID, "table_tkbcs"))
-                        )
-                  except Exception as e:
-                        print(f"Không tìm thấy bảng, lỗi {e}")            
+                  for i in range(3):  # Thử lại 3 lần nếu có lỗi
+                        try:
+                              # Truy cập trang thời khóa biểu của đơn vị với học kỳ hiện tại
+                              driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk={"".join(["20", semester])}&madp={unit[0]}")
+                              
+                              # Chờ bảng thời khóa biểu tải
+                              try:
+                                    table = WebDriverWait(driver, 40).until(
+                                          EC.presence_of_element_located((By.ID, "table_tkbcs"))
+                                    )
+                              except Exception as e:
+                                    print(f"Không tìm thấy bảng, lỗi {e}")            
 
-                  # Lấy tất cả các dòng trong bảng
-                  try:
-                        rows = WebDriverWait(driver, 20).until(
-                              EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
-                        )
-                  except Exception as e:
-                        print(f"Không tìm thấy các dòng, lỗi {e}")
+                              # Lấy tất cả các dòng trong bảng
+                              try:
+                                    rows = WebDriverWait(driver, 20).until(
+                                          EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
+                                    )
+                              except Exception as e:
+                                    print(f"Không tìm thấy các dòng, lỗi {e}")
 
-                  # Trích xuất dữ liệu từ bảng
-                  try:
-                        for row in rows:
-                              cells = row.find_elements(By.XPATH, ".//td")
-                              # Đảm bảo cells không rỗng trước khi truy cập
-                              if cells:
-                                    # for idx_cell, cell in enumerate(cells):
-                                          # Key: Mã môn học - Mã lớp
-                                          # Value: [Mã giảng viên, Tên giảng viên]
-                                    get_teacher_and_subject["-".join([cells[3].text, cells[2].text])] = [cells[8].text, cells[9].text]
-                  except Exception as e:
-                        print(f"Không in được dữ liệu, lỗi {e}")
+                              # Trích xuất dữ liệu từ bảng
+                              try:
+                                    for row in rows:
+                                          cells = row.find_elements(By.XPATH, ".//td")
+                                          # Đảm bảo cells không rỗng trước khi truy cập
+                                          if cells:
+                                                # for idx_cell, cell in enumerate(cells):
+                                                      # Key: Mã môn học - Mã lớp
+                                                      # Value: [Mã giảng viên, Tên giảng viên]
+                                                get_teacher_and_subject["-".join([cells[3].text, cells[2].text])] = [cells[8].text, cells[9].text]
+                              except Exception as e:
+                                    print(f"Không in được dữ liệu, lỗi {e}")
+                              break  # Nếu thành công, thoát vòng thử lại
+                        except Exception as e:
+                              print(f"Lần {i + 1} thất bại")
+                              time.sleep(2)  # Đợi 2 giây trước khi thử lại
                   
             driver.quit()
             return get_teacher_and_subject
