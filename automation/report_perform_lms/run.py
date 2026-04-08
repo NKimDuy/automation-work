@@ -5,7 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
-from modules.init_selenium import InitSelenium, 
+from modules.init_selenium import InitSelenium
 from utils.config_loader import ConfigLoader
 from utils.logger import setup_logger
 from utils.api import APIHandler
@@ -17,18 +17,29 @@ import re
 
 class ReportPerformLMS:
       def test(self):
-            start_selenium = InitSelenium()
-            start_selenium.process_get_detail_phdt()
-            #start_selenium.test_init()
+            # start_selenium = InitSelenium()
+            # start_selenium.process_get_detail_phdt()
+            api_handler = APIHandler()
+            print(api_handler.get_subject_from_api("251", "SG"))
+            # list_unit = api_handler.get_unit()
+            # for unit in list_unit:
+            #       list_subject = api_handler.get_subject_from_api(semester, unit[0])
+            #       for subject in list_subject:
+            #             print(subject)
             
 
       def report_perform_lms(self, from_day, to_day):
             start_selenium = InitSelenium()
             get_info_teacher = start_selenium.process_get_detail_phdt()
 
-            list_report_lms = {}
             api_handler = APIHandler()
             list_unit = api_handler.get_unit()
+
+            from_day = datetime.strptime(from_day, "%Y-%m-%d")
+            to_day = datetime.strptime(to_day, "%Y-%m-%d")
+
+            list_report_lms = {}
+
             for unit in list_unit:
                   list_subject = api_handler.get_subject_from_api(semester, unit[0])
                   for subject in list_subject:
@@ -66,5 +77,6 @@ class ReportPerformLMS:
 
 
 ob = ReportPerformLMS()
+# ob.test()
 # print(ob.test())
-ob.test()
+print(ob.report_perform_lms("2026-03-16", "2026-03-22"))
