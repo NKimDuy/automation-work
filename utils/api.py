@@ -34,7 +34,7 @@ class APIHandler:
                   "nhhk": semester,
                   "madp": unit_id
             }
-            call_api = requests.get(self.api_unit, headers=self.headers, params=params)
+            call_api = requests.get(self.api_subject, headers=self.headers, params=params)
             if call_api.status_code == 200:
                   data = call_api.json()
                   for subject in data.get("data", []):

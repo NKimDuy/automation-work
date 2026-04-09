@@ -11,32 +11,59 @@ from utils.logger import setup_logger
 from utils.api import APIHandler
 from config.settings import semester
 from datetime import datetime
+from openpyxl import Workbook, load_workbook
+from pathlib import Path
 import os
 import time 
 import re
 
 class ReportPerformLMS:
       def test(self):
-            start_selenium = InitSelenium()
-            start_selenium.process_get_detail_phdt()
-            #start_selenium.test_init()
+            # start_selenium = InitSelenium()
+            # start_selenium.process_get_detail_phdt()
+            api_handler = APIHandler()
+            print(api_handler.get_subject_from_api("251", "SG"))
+            # list_unit = api_handler.get_unit()
+            # for unit in list_unit:
+            #       list_subject = api_handler.get_subject_from_api(semester, unit[0])
+            #       for subject in list_subject:
+            #             print(subject)
             
+
+      def get_department_of_subject(self):
+            base_dir = Path(__file__).resolve().parent.parent
+            file = os.path.join(base_dir, "config", "excel", "mon_hoc_khoa.xlsx")
+            wb = load_workbook(file)
+            ws = wb.active
+            dict_subject_department = {}
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                  subject_code = row[0]
+                  department = row[1]
+                  dict_subject_department[subject_code] = department
+            return dict_subject_department
+
 
       def report_perform_lms(self, from_day, to_day):
             start_selenium = InitSelenium()
             get_info_teacher = start_selenium.process_get_detail_phdt()
 
-            list_report_lms = {}
             api_handler = APIHandler()
             list_unit = api_handler.get_unit()
+
+            from_day = datetime.strptime(from_day, "%Y-%m-%d")
+            to_day = datetime.strptime(to_day, "%Y-%m-%d")
+
+            list_report_lms = {}
+
             for unit in list_unit:
                   list_subject = api_handler.get_subject_from_api(semester, unit[0])
                   for subject in list_subject:
                         if subject["TUNGAYTKB"] is not None:
                               if from_day <= datetime.strptime(subject["TUNGAYTKB"], "%Y-%m-%d") <= to_day:
-                                    key = "-".join(subject["NhomTo"], subject["MaMH"])
+                                    key = "-".join([subject["NhomTo"], subject["MaMH"]])
                                     if key not in list_report_lms:
                                           list_report_lms[key] = [
+                                                self.get_department_of_subject().get(subject["MaMH"], "Không xác định"),
                                                 subject["NhomTo"],
                                                 subject["MaMH"],
                                                 subject["TenMH"],
@@ -52,7 +79,7 @@ class ReportPerformLMS:
             list_lsa = start_selenium.process_get_detail_lsa()
             get_group_subject_in_lsa = []
             for item in list_lsa:
-                  key = "-".join(item["NhomTo"], item["MaMH"])
+                  key = "-".join([item["group_id"], item["subject_id"]])
                   get_group_subject_in_lsa.append(key)
 
             for key_sb, value_sb in list_report_lms.items():
@@ -66,5 +93,6 @@ class ReportPerformLMS:
 
 
 ob = ReportPerformLMS()
+# ob.test()
 # print(ob.test())
-ob.test()
+print(ob.report_perform_lms("2026-03-16", "2026-03-22"))
