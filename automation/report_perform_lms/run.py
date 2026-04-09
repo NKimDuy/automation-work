@@ -5,7 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
-from modules.init_selenium import InitSelenium, 
+from modules.init_selenium import InitSelenium
 from utils.config_loader import ConfigLoader
 from utils.logger import setup_logger
 from utils.api import APIHandler
