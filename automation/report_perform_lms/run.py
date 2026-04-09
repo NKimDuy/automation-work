@@ -12,7 +12,6 @@ from utils.api import APIHandler
 from config.settings import semester
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
-from pathlib import Path
 import os
 import time 
 import re
@@ -31,7 +30,7 @@ class ReportPerformLMS:
             
 
       def get_department_of_subject(self):
-            base_dir = Path(__file__).resolve().parent.parent
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             file = os.path.join(base_dir, "config", "excel", "mon_hoc_khoa.xlsx")
             wb = load_workbook(file)
             ws = wb.active
@@ -41,7 +40,7 @@ class ReportPerformLMS:
                   department = row[1]
                   dict_subject_department[subject_code] = department
             return dict_subject_department
-
+            # return file
 
       def report_perform_lms(self, from_day, to_day):
             start_selenium = InitSelenium()
@@ -96,3 +95,4 @@ ob = ReportPerformLMS()
 # ob.test()
 # print(ob.test())
 print(ob.report_perform_lms("2026-03-16", "2026-03-22"))
+# print(ob.get_department_of_subject())
