@@ -18,16 +18,15 @@ import re
 
 class ReportPerformLMS:
       def test(self):
-            # start_selenium = InitSelenium()
-            # start_selenium.process_get_detail_phdt()
-            api_handler = APIHandler()
-            print(api_handler.get_subject_from_api("251", "SG"))
-            # list_unit = api_handler.get_unit()
-            # for unit in list_unit:
-            #       list_subject = api_handler.get_subject_from_api(semester, unit[0])
-            #       for subject in list_subject:
-            #             print(subject)
-            
+            start_selenium = InitSelenium()
+            list_lsa = start_selenium.process_get_detail_lsa()
+            try:
+                  for ls in list_lsa:
+                        if ls["group_id"] and ls["subject_id"]:
+                              print("-".join([ls["group_id"], ls["subject_id"]]))   
+            except Exception as e:
+                  print(f"An error occurred: {e}")
+
 
       def get_department_of_subject(self):
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -41,6 +40,7 @@ class ReportPerformLMS:
                   dict_subject_department[subject_code] = department
             return dict_subject_department
             # return file
+
 
       def report_perform_lms(self, from_day, to_day):
             start_selenium = InitSelenium()
@@ -77,9 +77,12 @@ class ReportPerformLMS:
 
             list_lsa = start_selenium.process_get_detail_lsa()
             get_group_subject_in_lsa = []
-            for item in list_lsa:
-                  key = "-".join([item["group_id"], item["subject_id"]])
-                  get_group_subject_in_lsa.append(key)
+            try:
+                  for item in list_lsa:
+                        key = "-".join([item["group_id"], item["subject_id"]])
+                        get_group_subject_in_lsa.append(key)
+            except Exception as e:
+                  print(f"Không có dữ liệu môn học: {e}")
 
             for key_sb, value_sb in list_report_lms.items():
                   if key_sb in get_group_subject_in_lsa:
