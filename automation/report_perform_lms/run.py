@@ -16,6 +16,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import os
 import time 
+from datetime import datetime, timedelta
 import re
 
 class ReportPerformLMS:
@@ -28,6 +29,18 @@ class ReportPerformLMS:
                               print("-".join([ls["group_id"], ls["subject_id"]]))   
             except Exception as e:
                   print(f"An error occurred: {e}")
+
+
+      def get_last_week_range(self):
+            today = datetime.today()
+
+            # Lùi về thứ 2 tuần này (weekday: 0=T2, 6=CN)
+            days_since_monday = today.weekday()  # hôm nay là thứ mấy tính từ T2
+
+            last_monday = today - timedelta(days=days_since_monday + 7)  # T2 tuần trước
+            last_sunday = last_monday + timedelta(days=6)                # CN tuần trước
+
+            return last_monday.strftime("%Y-%m-%d"), last_sunday.strftime("%Y-%m-%d")
 
 
       def get_department_of_subject(self):
@@ -48,35 +61,6 @@ class ReportPerformLMS:
             start_selenium = InitSelenium()
             get_info_teacher = start_selenium.process_get_detail_phdt()
 
-            api_handler = APIHandler()
-            list_unit = api_handler.get_unit()
-
-            from_day = datetime.strptime(from_day, "%Y-%m-%d")
-            to_day = datetime.strptime(to_day, "%Y-%m-%d")
-
-            list_report_lms = {}
-
-            for unit in list_unit:
-                  list_subject = api_handler.get_subject_from_api(semester, unit[0])
-                  for subject in list_subject:
-                        if subject["TUNGAYTKB"] is not None:
-                              if from_day <= datetime.strptime(subject["TUNGAYTKB"], "%Y-%m-%d") <= to_day:
-                                    key = "-".join([subject["NhomTo"], subject["MaMH"]])
-                                    if key not in list_report_lms:
-                                          list_report_lms[key] = [
-                                                self.get_department_of_subject().get(subject["MaMH"], "Không xác định"),
-                                                subject["NhomTo"],
-                                                subject["MaMH"],
-                                                subject["TenMH"],
-                                                subject["MaLop"],
-                                                subject["MaDP"],
-                                                subject["TenDP"],
-                                                get_info_teacher[key][0],
-                                                get_info_teacher[key][1]
-                                          ]
-                                    else:
-                                          list_report_lms[key][3] = ",".join([list_report_lms[key][3], subject["MaLop"]])  
-
             list_lsa = start_selenium.process_get_detail_lsa()
             get_group_subject_in_lsa = []
             try:
@@ -86,33 +70,122 @@ class ReportPerformLMS:
             except Exception as e:
                   print(f"Không có dữ liệu môn học: {e}")
 
+            api_handler = APIHandler()
+            list_unit = api_handler.get_unit()
+
+            from_day = datetime.strptime(from_day, "%Y-%m-%d")
+            to_day = datetime.strptime(to_day, "%Y-%m-%d")
+
+            department_dic = {
+                  "TX.NNNN": "Ngoại ngữ",
+                  "TX.LALA": "Luật",
+                  "TX.LA": "Luật",
+                  "TX.CBML": "Cơ bản",
+                  "TX.CBCB": "Cơ bản",
+                  "TX.XHXH": "XHH-CTXH-ĐNA",
+                  "TX.KKKK": "Kế toán - Kiểm toán",
+                  "TX.QTQT": "Quản Trị Kinh Doanh",
+                  "TX.TCTC": "Tài chính - Ngân hàng",
+                  "TX.SHSH": "Công Nghệ Sinh Học",
+                  "TX.KIKI": "Kinh tế và quản lý công",
+                  "TX.KTKT": "Xây dựng",
+            }
+
+            list_report_lms = {}
+
+            for unit in list_unit:
+                  list_subject = api_handler.get_subject_from_api(semester, unit[0])
+                  for subject in list_subject:
+                        if subject["TUNGAYTKB"] is not None:
+                              if from_day <= datetime.strptime(subject["TUNGAYTKB"], "%Y-%m-%d") <= to_day:
+                                    key_department = self.get_department_of_subject().get(subject["MaMH"], "Không xác định")
+                                    value_department = department_dic.get(key_department, "Không xác định")
+                                    key = "-".join([subject["NhomTo"], subject["MaMH"]])
+                                    if key not in list_report_lms:
+                                          list_report_lms[key] = [
+                                                value_department,
+                                                subject["NhomTo"],
+                                                subject["MaMH"],
+                                                subject["TenMH"],
+                                                subject["MaLop"],
+                                                subject["MaDP"],
+                                                subject["TenDP"],
+                                                get_info_teacher[key][0],
+                                                get_info_teacher[key][1],
+                                                from_day.strftime("%d-%m-%Y")
+                                          ]
+                                    else:
+                                          list_report_lms[key][3] = ",".join([list_report_lms[key][3], subject["MaLop"]])  
+
             for key_sb, value_sb in list_report_lms.items():
                   if key_sb in get_group_subject_in_lsa:
                         list_report_lms[key_sb].append("x")
                   else:
                         list_report_lms[key_sb].append("")
             
-            return list_report_lms
+            list_lms_add_to_report = []
+            for key, value in list_report_lms.items():
+                  dict_subject = {
+                        "department": value[0],
+                        "group": value[1],
+                        "id_subject": value[2],
+                        "name_subject": value[3],
+                        "id_class": value[4],
+                        "id_unit": value[5],
+                        "name_unit": value[6],
+                        "id_teacher": value[7],
+                        "name_teacher": value[8],
+                        "from_day": value[9],
+                        "has_lms": value[10]
+                  }
+                  list_lms_add_to_report.append(dict_subject)
+            self.decor_report_perform_lms(list_lms_add_to_report, from_day.strftime("%d-%m-%Y"), to_day.strftime("%d-%m-%Y"))
 
 
-      def decor_report_perform_lms(self):
-            wb = Workbook()
-            if "Sheet" in wb.sheetnames:
-                  wb.remove(wb["Sheet"])
+      def set_dimension_column(self, name_sheet, title_header):
+            for col_num in range(1, len(title_header) + 1):
+                  column_letter = get_column_letter(col_num)
+                  max_length = 0
+                  
+                  # Duyệt qua tất cả ô trong cột
+                  for row in name_sheet[column_letter]:
+                        try:
+                              if len(str(row.value)) > max_length:
+                                    max_length = len(str(row.value))
+                        except:
+                              pass
+                  
+                  # Set độ rộng với padding
+                  adjusted_width = min(max_length + 10, 100)  # Tối đa 100 ký tự
+                  name_sheet.column_dimensions[column_letter].width = adjusted_width
 
-            sheet_general = wb.create_sheet("Tổng quan")
+
+      def decor_report_perform_lms(self, data, from_day, to_day):
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            folder_track_lms = os.path.join(base_dir, "data", "output", "report_perform_lms", semester)
+            os.makedirs(folder_track_lms, exist_ok=True)
+            flle_track_no_lms = os.path.join(folder_track_lms, "__danh_sach_khong_thuc_hien_lms.xlsx")
+            name_file = f"BC Tình hình soạn thảo LMS HK {semester} từ ngày ({from_day} đến ngày {to_day}).xlsx"
+            # name_file = f"test.xlsx"
+            file_report_lms = os.path.join(folder_track_lms, name_file)
             
-            data = [
-                  {'department': "TX.LALA", 'group': "SG001", 'id_subject': "ACCO4331", 'name_subject': "Quản trị học",'id_class': "TM123456", 'id_unit': "TM", 'name_unit': "Đồng Tháp Mười Long An", 'id_teacher': "TX001", 'name_teacher': "Nguyễn Kim Duy", 'has_lms': "x"},
-                  {'department': "TX.QTQT","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": "x"},
-                  {'department': "TX.LALA","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": ""},
-                  {'department': "TX.LALA","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": "x"},
-                  {'department': "TX.LALA","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": ""},
-                  {'department': "TX.QTQT","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": "x"},
-                  {'department': "TX.QTQT","group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", "has_lms": ""}
-            ]
-            summary_report = []
+            wb_report_lms = Workbook()
+            if "Sheet" in wb_report_lms.sheetnames:
+                  wb_report_lms.remove(wb_report_lms["Sheet"])
+
+            sheet_general = wb_report_lms.create_sheet("Tổng quan")
+            
+            # data = [
+            #       {'department': "TX.LALA", 'group': "SG001", 'id_subject': "ACCO4331", 'name_subject': "Quản trị học", 'id_class': "TM123456", 'id_unit': "TM", 'name_unit': "Đồng Tháp Mười Long An", 'id_teacher': "TX001", 'name_teacher':  "Nguyễn Kim Duy",'from_day': '2026-06-06', 'has_lms': "x"},
+            #       {'department': "TX.QTQT", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": "x"},
+            #       {'department': "TX.LALA", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": ""},
+            #       {'department': "TX.LALA", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": "x"},
+            #       {'department': "TX.LALA", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": ""},
+            #       {'department': "TX.QTQT", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": "x"},
+            #       {'department': "TX.QTQT", "group": "SG001", "id_subject": "ACCO4331", "name_subject": "Quản trị học", "id_class": "TM123456", "id_unit": "TM", "name_unit": "Đồng Tháp Mười Long An", "id_teacher": "TX001", "name_teacher": "Nguyễn Kim Duy", 'from_day': '2026-06-06', "has_lms": ""},
+            # ]
             department_stats = {}
+            summary_report = []
             footer_sheet_general = ["Tổng cộng", 0, 0, 0]
             for dic in data:
                   dept = dic['department']
@@ -176,31 +249,100 @@ class ReportPerformLMS:
                   cell.font = footer_font
                   cell.alignment = data_alignment
                   cell.border = border_style
+            
+            self.set_dimension_column(sheet_general, header_sheet_general)
+            
+            sheet_detail = wb_report_lms.create_sheet("Chi tiết")
+
+            header_sheet_detail = ["STT", "Khoa", "Nhóm môn học", "Mã môn học", "Tên môn học", "Mã lớp", "Mã đơn vị", "Tên đơn vị", "Mã giảng viên", "Tên giảng viên", "Ngày bắt đầu TKB", "Đã soạn LMS"]
+            sheet_detail.append(header_sheet_detail)
+            for col_num, header in enumerate(header_sheet_detail, 1):
+                  cell = sheet_detail.cell(row=1, column=col_num)
+                  cell.font = header_font
+                  cell.fill = header_fill
+                  cell.alignment = header_alignment
+                  cell.border = border_style
+
+            
+            if not os.path.exists(flle_track_no_lms):
+                  wb_new_file_track_no_lms = Workbook()
+                  ws_new_file_track_no_lms = wb_new_file_track_no_lms.active
+                  ws_new_file_track_no_lms.append(header_sheet_detail[1:-1])
+                  wb_new_file_track_no_lms.save(flle_track_no_lms)
+
+            wb_file_track_no_lms = load_workbook(flle_track_no_lms)
+            ws_file_track_no_lms = wb_file_track_no_lms.active
+            row_in_sheet_no_lms = ws_file_track_no_lms.max_row + 1
+
+            row_in_sheet_detail = 2
+            for subject in data:
+                  has_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid") # mặc định các dòng trong
+                  if subject['has_lms'] != 'x':
+                        has_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid") # nếu đã soạn LMS tô màu xanh lá
+
+                        cell_no_lms_1 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=1)
+                        cell_no_lms_1.value = subject['department']
+
+                        cell_no_lms_2 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms , column=2)
+                        cell_no_lms_2.value = subject['group']
+
+                        cell_no_lms_3 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=3)
+                        cell_no_lms_3.value = subject['id_subject']
+
+                        cell_no_lms_4 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=4)
+                        cell_no_lms_4.value = subject['name_subject']
+
+                        cell_no_lms_5 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=5)
+                        cell_no_lms_5.value = subject['id_class']
+
+                        cell_no_lms_6 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=6)
+                        cell_no_lms_6.value = subject['id_unit']
+
+                        cell_no_lms_7 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=7)
+                        cell_no_lms_7.value = subject['name_unit']
+
+                        cell_no_lms_8 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=8)
+                        cell_no_lms_8.value = subject['id_teacher']
+
+                        cell_no_lms_9 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=9)
+                        cell_no_lms_9.value = subject['name_teacher']
+
+                        cell_no_lms_10 = ws_file_track_no_lms.cell(row=row_in_sheet_no_lms, column=10)
+                        cell_no_lms_10.value = subject['from_day']
+
+                        # wb_file_track_no_lms.save(flle_track_no_lms)
+                        print(f"Đã thêm môn học {subject['id_subject']} - {subject['name_subject']} - {subject['id_teacher']} - {subject['name_teacher']}  vào file theo dõi không thực hiện LMS.")
+                        row_in_sheet_no_lms += 1
 
 
-            for col_num in range(1, len(header_sheet_general) + 1):
-                  column_letter = get_column_letter(col_num)
-                  max_length = 0
-                  
-                  # Duyệt qua tất cả ô trong cột
-                  for row in sheet_general[column_letter]:
-                        try:
-                              if len(str(row.value)) > max_length:
-                                    max_length = len(str(row.value))
-                        except:
-                              pass
-                  
-                  # Set độ rộng với padding
-                  adjusted_width = min(max_length + 10, 100)  # Tối đa 100 ký tự
-                  sheet_general.column_dimensions[column_letter].width = adjusted_width
+                  cell = sheet_detail.cell(row=row_in_sheet_detail, column=1)
+                  cell.value = row_in_sheet_detail - 1
+                  cell.font = data_font
+                  cell.alignment = data_alignment
+                  cell.border = border_style
+                  cell.fill = has_fill
 
-            sheet_detail = wb.create_sheet("Chi tiết")
+                  col_in_sheet_derail = 2
+                  for key, value in subject.items():
+                        cell = sheet_detail.cell(row=row_in_sheet_detail, column=col_in_sheet_derail)
+                        cell.value = value
+                        cell.font = data_font
+                        cell.alignment = data_alignment
+                        cell.border = border_style
+                        cell.fill = has_fill
 
-            wb.save(os.path.join(os.getcwd(), "report_perform_lms.xlsx"))
+                        col_in_sheet_derail += 1
+                  row_in_sheet_detail += 1
+
+            wb_file_track_no_lms.save(flle_track_no_lms)
+
+            self.set_dimension_column(sheet_detail, header_sheet_detail)
+
+            wb_report_lms.save(file_report_lms)
 
 ob = ReportPerformLMS()
-ob.decor_report_perform_lms()
+# ob.decor_report_perform_lms()
 # ob.test()
 # print(ob.test())
-# print(ob.report_perform_lms("2026-02-01", "2026-02-25"))
+ob.report_perform_lms("2026-04-06", "2026-04-12")
 # print(ob.get_department_of_subject())
