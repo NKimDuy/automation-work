@@ -1,8 +1,2 @@
-2026-03-31 10:43:02,024 - INFO - Bắt đầu chạy chương trình cập nhật sinh viên vào LMS
-2026-03-31 10:43:37,319 - ERROR - Error terminating service process.
-Traceback (most recent call last):
-  File "C:\Users\nguyen kim duy\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\common\service.py", line 181, in _terminate_process
-    self.process.terminate()
-  File "C:\Users\nguyen kim duy\AppData\Local\Programs\Python\Python312\Lib\subprocess.py", line 1671, in terminate
-    _winapi.TerminateProcess(self._handle, 1)
-OSError: [WinError 6] The handle is invalid
+2026-04-14 09:48:57,693 - INFO - Bắt đầu chạy chương trình cập nhật sinh viên vào LMS
+2026-04-14 09:49:55,183 - INFO - Đã lấy được 139 môn học từ LSA
