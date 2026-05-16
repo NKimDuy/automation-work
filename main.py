@@ -46,7 +46,7 @@ def job_report_lms():
 schedule.every().day.at("17:00").do(job_update_students)
 
 # Báo cáo tình hình LMS mỗi thứ 2 lúc 08:00
-schedule.every().monday.at("07:00").do(job_report_lms)
+schedule.every().monday.at("08:39").do(job_report_lms)
 
 
 if __name__ == "__main__":

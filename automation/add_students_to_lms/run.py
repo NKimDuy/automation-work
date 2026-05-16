@@ -79,10 +79,12 @@ class UpdateStudents:
             logger.info("Bắt đầu chạy chương trình cập nhật sinh viên vào LMS")
 
             # Scraping LSA để lấy danh sách môn học cần xử lý
+            print("Bắt đầu scraping LSA...")
             list_subject_lsa = start_selenium.process_get_detail_lsa()
             logger.info(f"Đã lấy được {len(list_subject_lsa)} môn học từ LSA")
 
             # Đăng nhập LMS, driver này sẽ dùng xuyên suốt vòng lặp bên dưới
+            print("Đăng nhập LMS...")
             driver = start_selenium.login_selenium(self.url_lms)
 
             for one_subject in list_subject_lsa:
@@ -259,3 +261,5 @@ class UpdateStudents:
                   print(f"Không mở được tab mới, lỗi {e}")
 
 
+ob = UpdateStudents()
+ob.update_student_lms()
