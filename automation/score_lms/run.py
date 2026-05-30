@@ -155,10 +155,14 @@ class ScoreLMS:
 
         # lấy tất cả text có trong môn học 
         full_text = driver.find_element(By.TAG_NAME, "body").text
-        lines = full_text.splitlines() # tách text thành từng dòng để model dự đoán, vì model được train trên từng câu, nên cần tách text thành từng dòng/câu để dự đoán chính xác hơn
+        # tách text thành từng dòng để model dự đoán,
+        #vì model được train trên từng câu, nên cần tách text thành từng dòng/câu để dự đoán chính xác hơn
+        lines = full_text.splitlines()  
         # loại bỏ các dòng có 1 từ hoặc không có từ nào, vì những dòng này thường không mang nhiều thông tin
         lines = [item for item in lines if len(item.split()) > 1] 
-        # loại bỏ các dòng có chứa các từ khóa không liên quan đến việc đánh giá cấu trúc môn học, như "bài tập", "diễn đàn", "câu hỏi thảo luận", vì những dòng này thường là các phần tử phụ trong LMS và không phải là tiêu chí đánh giá cấu trúc môn học
+        # loại bỏ các dòng có chứa các từ khóa không liên quan đến việc đánh giá cấu trúc môn học, 
+        # như "bài tập", "diễn đàn", "câu hỏi thảo luận", 
+        # vì những dòng này thường là các phần tử phụ trong LMS và không phải là tiêu chí đánh giá cấu trúc môn học
         lines = [line for line in lines if not any(noise in line.lower() for noise in self.NOISE_REMOVE)]
         results = self.predict(model, lines)
         results = list(set(results))  # lấy kết quả duy nhất để đánh giá
@@ -194,10 +198,14 @@ class ScoreLMS:
         else:
             notes += "\nThiếu bảng điểm giữa kỳ"
 
+        # khúc này sẽ gọi lsa để lấy dữ liệu sinh viên đăng ký và sinh viên truy cập,
+        #  từ đó tính ra tỷ lệ sinh viên truy cập và tỷ lệ giảng viên truy cập, 
+        # nếu có dữ liệu thì sẽ áp dụng điểm số tương ứng, nếu không có dữ liệu thì sẽ ghi chú vào file excel
         dic_score_apply["svdk"]["score"] = 15
         dic_score_apply["svtc"]["score"] = 15
         dic_score_apply["tlsvtc"]["score"] = 0.7
         dic_score_apply["tlgvtc"]["score"] = 1
+
 
         dic_score_apply["td"]["score"] = sum_score
 
@@ -247,6 +255,11 @@ class ScoreLMS:
 
         return [dic_score_apply, notes] 
 
+    def test_lsa(self):
+            start_selenium = InitSelenium()
+            return start_selenium.process_get_detail_lsa()
+
+
     def score_lms(self):
         
         model_file = os.path.join(self.base_dir, "AI", "model", "model_vi_classification.pkl")
@@ -256,7 +269,9 @@ class ScoreLMS:
         wb_score = load_workbook(excel_file)
         ws_score = wb_score.active
 
-        # lấy tiêu đề cột hiện tại để kiểm tra xem đã có cột điểm số chưa, nếu chưa có thì sẽ thêm cột điểm số vào cuối cùng của file excel, nếu đã có rồi thì sẽ ghi đè vào cột đó
+        # lần đầu kiểm tra trong file đã có các cột để tiến hành đánh giá chưa
+        # Lấy cột thực hiện lms kiểm tra (lấy bất kỳ cột nào cũng được) nhưng lấy cột thực hiện lms
+        # vì cột này sẽ luôn đứng sau các cột có sẵn trong file
         headers = [ws_score.cell(row=1, column=col).value for col in range(1, ws_score.max_column + 1)]
         column_current = ws_score.max_column               
         if self.DIC_SCORE_BASE["thlms"]["name"] not in headers:
@@ -271,13 +286,17 @@ class ScoreLMS:
   
         #chỗ này sẽ chạy vòng lặp for để duyệt qua các môn học trong file excel
         for i, row in enumerate(ws_score.iter_rows(min_row=2, values_only=True), start=2):
-            # mỗi lần duyệt qua một môn học thì sẽ mở lại trang tìm kiếm môn học trên LMS để đảm bảo rằng các bước tìm kiếm và đánh giá được thực hiện chính xác cho từng môn học, tránh bị lỗi do trang web bị thay đổi khi duyệt qua nhiều môn học
+            # mỗi lần duyệt qua một môn học thì sẽ mở lại trang tìm kiếm môn học trên LMS 
+            # để đảm bảo rằng các bước tìm kiếm và đánh giá được thực hiện chính xác cho từng môn học, 
+            # tránh bị lỗi do trang web bị thay đổi khi duyệt qua nhiều môn học
             driver.get(self.url_lms)
 
             ten_subject = row[0]  # Giả sử tên môn học nằm ở cột A
             ten_gv = row[1]       # Giả sử tên giảng viên nằm ở cột B 
            
-           # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, vì những môn này chỉ cần soạn LMS hoàn chỉnh là được, không yêu cầu phải có đầy đủ các tiêu chí như các môn khác
+           # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, 
+           # nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, 
+           # vì những môn này chỉ cần soạn LMS hoàn chỉnh là được, không yêu cầu phải có đầy đủ các tiêu chí như các môn khác
             if ten_subject.lower() in [subject.lower() for subject in self.NOT_RATED]:
                 print(f"✅ Môn học thuộc cách chấm chỉ hoàn thành của khoa xây dựng")
                 ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Hoàn thành"
@@ -310,10 +329,13 @@ class ScoreLMS:
                 href_link_subject = get_list_subject.get_attribute("href")
                 # mở link môn học để kiểm tra các tiêu chí đánh giá cấu trúc môn học trên LMS
                 driver.get(href_link_subject)
-                # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, cũng như ghi chú các tiêu chí chưa đạt vào file excel
+                # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, 
+                # cũng như ghi chú các tiêu chí chưa đạt vào file excel
                 dic_score_apply, notes = self.get_results_score(driver, model, ten_gv)
                 
                 col_idx = column_current + 1
+                # dic_score_apply sẽ trả về dictionary
+                # for col_criteria in dic_score_apply: sẽ duyệt qua các key của dictionary
                 for col_criteria in dic_score_apply:
                     ws_score.cell(row=i, column=col_idx).value = dic_score_apply[col_criteria]["score"]
                     col_idx += 1
@@ -329,4 +351,5 @@ class ScoreLMS:
         driver.quit()
         
 test = ScoreLMS()
-test.score_lms()
+
+print(test.test_lsa())
