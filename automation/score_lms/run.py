@@ -139,7 +139,7 @@ class ScoreLMS:
         driver.switch_to.window(second_tab)
         return chua_reply
 
-    def get_results_score(self, driver, model, ten_gv):
+    def get_results_score(self, driver, model, ten_gv, list_lsa):
         notes = '' # lưu các tiêu chí chưa đạt để ghi chú vào file excel
         sum_score = 0 # lưu tổng điểm của môn học, sẽ được ghi vào file excel ở cột "Tổng điểm"
         # copy từ điển điểm để áp dụng cho từng môn học, tránh bị ghi đè khi duyệt qua nhiều môn
@@ -173,8 +173,13 @@ class ScoreLMS:
             dic_score_apply["ttkh"]["score"] = 10
             sum_score += 10
         else:
-            name_not_check_ttkn = ["Thiếu " + self.DIC_CRETERIA[i] for i in check_ttkn]
-            notes += "\n".join(name_not_check_ttkn)
+            # notes += "\nChưa đủ thông tin khóa học, cụ thể ("
+            name_not_check_ttkn = ["thiếu " + self.DIC_CRETERIA[i] for i in check_ttkn]
+            # notes += " ".join(name_not_check_ttkn)
+            # # notes += "\n".join(name_not_check_ttkn)
+            # notes += ")"
+            notes += f"\nChưa đủ thông tin khóa học, cụ thể ({','.join(name_not_check_ttkn)})"
+            
         
         if 6 in results:
             dic_score_apply["mtht"]["score"] = 20
@@ -201,13 +206,10 @@ class ScoreLMS:
         # khúc này sẽ gọi lsa để lấy dữ liệu sinh viên đăng ký và sinh viên truy cập,
         #  từ đó tính ra tỷ lệ sinh viên truy cập và tỷ lệ giảng viên truy cập, 
         # nếu có dữ liệu thì sẽ áp dụng điểm số tương ứng, nếu không có dữ liệu thì sẽ ghi chú vào file excel
-        dic_score_apply["svdk"]["score"] = 15
-        dic_score_apply["svtc"]["score"] = 15
-        dic_score_apply["tlsvtc"]["score"] = 0.7
-        dic_score_apply["tlgvtc"]["score"] = 1
-
-
-        dic_score_apply["td"]["score"] = sum_score
+        dic_score_apply["svdk"]["score"] = list_lsa[0] if list_lsa else "lỗi"
+        dic_score_apply["svtc"]["score"] = list_lsa[1] if list_lsa else "lỗi"
+        dic_score_apply["tlsvtc"]["score"] = list_lsa[2] if list_lsa else "lỗi"
+        dic_score_apply["tlgvtc"]["score"] = list_lsa[3] if list_lsa else "lỗi"
 
         all_links = driver.find_elements(By.TAG_NAME, "a")
         for a in all_links:
@@ -224,6 +226,7 @@ class ScoreLMS:
         check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if not d]
         if not check_bt:
             dic_score_apply["bt"]["score"] = 20
+            sum_score += 20
         else:
             if check_bt == ["quiz"]:
                 notes += "\nThiếu bài tập trắc nghiệm"
@@ -231,6 +234,8 @@ class ScoreLMS:
                 notes += "\nThiếu bài tập tự luận"
             else:
                 notes += "\nThiếu bài tập tự luận/trắc nghiệm"
+
+        dic_score_apply["td"]["score"] = sum_score
 
         # đánh giá diễn đàn, nếu có diễn đàn thì sẽ mở từng diễn đàn lên để kiểm tra xem giảng viên đã tương tác với tất cả sinh viên chưa, nếu có diễn đàn nhưng không tương tác đầy đủ thì sẽ ghi chú vào file excel, nếu có diễn đàn và tương tác đầy đủ thì sẽ được điểm tối đa, nếu không có diễn đàn nào thì sẽ không được điểm nào và ghi chú vào file excel
         if forums:
@@ -253,11 +258,66 @@ class ScoreLMS:
             #print(f" ❌ Không có diễn đàn nào")
             notes += "\nKhông có diễn đàn"   
 
+        score_basic = [
+            dic_score_apply["ctdd"]["score"] == 15,
+            dic_score_apply["ttkh"]["score"] == 10,
+            dic_score_apply["mtht"]["score"] == 20,
+            dic_score_apply["ttbg"]["score"] == 20,
+            dic_score_apply["bdgk"]["score"] == 15,
+            float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 70,
+            float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0,
+            sum_score >= 50
+        ]
+
+        if all(score_basic):
+            dic_score_apply["kqdg"]["score"] = "Đạt cơ bản"
+
+            score_advance = [
+                dic_score_apply["dd"]["score"] == "x",
+                dic_score_apply["bt"]["score"] == 20,
+                float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 90,
+                float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0,
+                sum_score >= 80
+            ]
+            if all(score_advance):
+                dic_score_apply["kqdg"]["score"] = "Xem xét nâng cao"
+
+        else:
+            dic_score_apply["kqdg"]["score"] = "Chưa đạt cơ bản"
+
         return [dic_score_apply, notes] 
 
     def test_lsa(self):
-            start_selenium = InitSelenium()
-            return start_selenium.process_get_detail_lsa()
+
+        dic_lsa = {}
+        start_selenium = InitSelenium()
+        get_lsa_data = start_selenium.process_get_detail_lsa()
+        for d in get_lsa_data:
+            if "subject_id" not in d:
+                continue
+            key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
+            value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
+            dic_lsa[key] = value  
+        print(dic_lsa)  
+        
+        excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","test.xlsx")
+        wb_score = load_workbook(excel_file)
+        ws_score = wb_score.active
+        for i, row in enumerate(ws_score.iter_rows(min_row=2, values_only=True), start=2):
+            ten_subject = row[0]  # Giả sử tên môn học nằm ở cột A
+            ten_gv = row[1]       # Giả sử tên giảng viên nằm ở cột B 
+            ma_mh = row[2]       # Giả sử mã môn học nằm ở cột C
+            ma_nhom = row[3]      # Giả sử mã nhóm môn học nằm ở cột D
+            ma_gv = row[4]       # Giả sử mã giảng viên nằm ở cột E
+            
+            key_lsa = f"{ma_mh}_{ma_nhom}_{ma_gv}"
+
+            print(dic_lsa.get(key_lsa))
+
+    
+
+        
+        
 
 
     def score_lms(self):
@@ -283,7 +343,17 @@ class ScoreLMS:
 
         start_selenium = InitSelenium()
         driver = start_selenium.login_selenium(self.url_lms)
-  
+
+        # tạo dictionary với key là mã môn học + mã nhóm + mã giảng viên, value là list chứa dữ liệu lsa
+        dic_lsa = {}
+        get_lsa_data = start_selenium.process_get_detail_lsa()
+        for d in get_lsa_data:
+            if "subject_id" not in d:
+                continue
+            key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
+            value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
+            dic_lsa[key] = value
+
         #chỗ này sẽ chạy vòng lặp for để duyệt qua các môn học trong file excel
         for i, row in enumerate(ws_score.iter_rows(min_row=2, values_only=True), start=2):
             # mỗi lần duyệt qua một môn học thì sẽ mở lại trang tìm kiếm môn học trên LMS 
@@ -293,7 +363,12 @@ class ScoreLMS:
 
             ten_subject = row[0]  # Giả sử tên môn học nằm ở cột A
             ten_gv = row[1]       # Giả sử tên giảng viên nằm ở cột B 
-           
+            ma_mh = row[2]       # Giả sử mã môn học nằm ở cột C
+            ma_nhom = row[3]      # Giả sử mã nhóm môn học nằm ở cột D
+            ma_gv = row[4]       # Giả sử mã giảng viên nằm ở cột E
+            
+            key_lsa = f"{ma_mh}_{ma_nhom}_{ma_gv}"
+
            # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, 
            # nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, 
            # vì những môn này chỉ cần soạn LMS hoàn chỉnh là được, không yêu cầu phải có đầy đủ các tiêu chí như các môn khác
@@ -331,8 +406,8 @@ class ScoreLMS:
                 driver.get(href_link_subject)
                 # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, 
                 # cũng như ghi chú các tiêu chí chưa đạt vào file excel
-                dic_score_apply, notes = self.get_results_score(driver, model, ten_gv)
-                
+                dic_score_apply, notes = self.get_results_score(driver, model, ten_gv, dic_lsa.get(key_lsa))
+                print(dic_score_apply)
                 col_idx = column_current + 1
                 # dic_score_apply sẽ trả về dictionary
                 # for col_criteria in dic_score_apply: sẽ duyệt qua các key của dictionary
@@ -351,5 +426,5 @@ class ScoreLMS:
         driver.quit()
         
 test = ScoreLMS()
-
-print(test.test_lsa())
+test.score_lms()
+# print(test.test_lsa())
