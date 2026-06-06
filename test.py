@@ -28,7 +28,7 @@ from sklearn.pipeline import Pipeline
 # ─────────────────────────────────────────────
 # 1. CẤU HÌNH — chỉnh tại đây
 # ─────────────────────────────────────────────
-FILE_PATH   = "./tieu_chi_lms_aug.xlsx"       # Đường dẫn file CSV hoặc Excel (.xlsx)
+FILE_PATH   = "C:\\Users\\nguyen kim duy\\Downloads\\tieu_chi_lms_augmented.xlsx"       # Đường dẫn file CSV hoặc Excel (.xlsx)
 TEXT_COL    = "tieu_chi"           # Tên cột chứa cụm từ
 LABEL_COL   = "nhan"          # Tên cột chứa nhãn (1–6)
 TEST_SIZE   = 0.2              # 20% dùng để test
@@ -141,15 +141,12 @@ def predict(model, texts: list) -> list:
 # 6. MAIN
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    df    = load_data(FILE_PATH)
-    model = train(df)
-    # model = joblib.load("model_vi_classification.pkl")  # Tải model đã lưu nếu đã train trước đó
+    # df    = load_data(FILE_PATH)
+    # model = train(df)
+    model = joblib.load("model_vi_classification.pkl")  # Tải model đã lưu nếu đã train trước đó
 
     print("\n🔍 Thử dự đoán mẫu mới:")
     samples = [
-        "thầy là nguyễn kim duy",   # ← thay bằng cụm từ thực tế
-        "đọc tài liệu đi các em",
-        "cô nè",
-        "môn học này hay đó"
+        "TỶ LỆ ĐÁNH GIÁ CỦA MỖI THÀNH PHẦN"
     ]
     predict(model, samples)

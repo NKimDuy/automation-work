@@ -117,27 +117,56 @@ class ScoreLMS:
         driver.switch_to.window(driver.window_handles[-1])
 
         rows = driver.find_elements(By.CSS_SELECTOR, "tr.discussion")
-
-        chua_reply = []
+        flad_forum = False
         if rows:
             for row in rows:
                 try:
-                    ten_sv = row.find_element(By.CSS_SELECTOR, "td.author .mb-1").text.strip()
+                    number_responses = row.find_element(By.CSS_SELECTOR, "td.text-center span").text.strip()
+                    if int(number_responses) == 1:
+                        # try:
+                        #     ten_sv = row.find_element(By.CSS_SELECTOR, "td.author .mb-1").text.strip()
+                        # except:
+                        #     ten_sv = "Không rõ"
+                        try:
+                            ten_reply = row.find_element(By.CSS_SELECTOR, "td.text-start .mb-1").text.strip()
+                        except:
+                            ten_reply = "Không có"
+
+                        if ten_giang_vien.lower() not in ten_reply.lower():
+                            flad_forum = True
+                            break
+                    else:
+                        try:
+
+                            thrid_tab = driver.current_window_handle
+
+                            link_topic = row.find_element(By.CSS_SELECTOR, "th.topic a").text.strip()
+                            link_topic = link_topic.get_attribute("href")
+                            driver.execute_script("window.open(arguments[0]);", link_topic)
+                            driver.switch_to.window(driver.window_handles[-1])
+                            try:
+                                list_teacher_name = []
+                                find_teacher_name = driver.find_elements(By.CSS_SELECTOR, "header .mb-2")
+                                for item in find_teacher_name:
+                                    teacher_name = item.find_element(By.CSS_SELECTOR, "div.mb-3 a").text.strip()
+                                    list_teacher_name.append(teacher_name.lower())
+                                driver.switch_to.window(thrid_tab)
+                                if list_teacher_name.count(ten_giang_vien.lower()) > 1:
+                                    flad_forum = True
+                                    break 
+                            except:
+                                ten_gv = "Không rõ"
+
+                        except:
+                            print("Không tìm thấy link topic trong diễn đàn")
+
                 except:
-                    ten_sv = "Không rõ"
+                    number_responses = 0
 
-                try:
-                    ten_reply = row.find_element(By.CSS_SELECTOR, "td.text-start .mb-1").text.strip()
-                except:
-                    ten_reply = "Không có"
-
-                # print(f"Tên SV: {ten_sv}, Tên GV: {ten_giang_vien}, Tên reply: {ten_reply}")
-                if ten_giang_vien.lower() not in ten_reply.lower():
-                    chua_reply.append(ten_sv)
-
+            
         driver.close()
         driver.switch_to.window(second_tab)
-        return chua_reply
+        return flad_forum
 
     def get_results_score(self, driver, model, ten_gv, list_lsa):
         notes = '' # lưu các tiêu chí chưa đạt để ghi chú vào file excel
@@ -223,17 +252,24 @@ class ScoreLMS:
             if "assign" in a_href:
                 assign[a_text] = a_href
 
-        check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if not d]
-        if not check_bt:
+        check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if d]
+        if check_bt:
             dic_score_apply["bt"]["score"] = 20
             sum_score += 20
         else:
-            if check_bt == ["quiz"]:
-                notes += "\nThiếu bài tập trắc nghiệm"
-            elif check_bt == ["assign"]:
-                notes += "\nThiếu bài tập tự luận"
-            else:
-                notes += "\nThiếu bài tập tự luận/trắc nghiệm"
+            notes += "\nThiếu bài tập"
+
+        # check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if not d]
+        # if not check_bt:
+        #     dic_score_apply["bt"]["score"] = 20
+        #     sum_score += 20
+        # else:
+        #     if check_bt == ["quiz"]:
+        #         notes += "\nThiếu bài tập trắc nghiệm"
+        #     elif check_bt == ["assign"]:
+        #         notes += "\nThiếu bài tập tự luận"
+        #     else:
+        #         notes += "\nThiếu bài tập tự luận/trắc nghiệm"
 
         dic_score_apply["td"]["score"] = sum_score
 
@@ -314,18 +350,14 @@ class ScoreLMS:
 
             print(dic_lsa.get(key_lsa))
 
-    
-
-        
-        
-
 
     def score_lms(self):
         
-        model_file = os.path.join(self.base_dir, "AI", "model", "model_vi_classification.pkl")
+        model_file = os.path.join(self.base_dir, "AI", "model", "model_vi_classification_v2.pkl")
         model = joblib.load(model_file)
 
         excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","test.xlsx")
+        # excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","2025-06-04_251_email-nhom-mh-hk.xlsx")
         wb_score = load_workbook(excel_file)
         ws_score = wb_score.active
 
@@ -345,83 +377,100 @@ class ScoreLMS:
         driver = start_selenium.login_selenium(self.url_lms)
 
         # tạo dictionary với key là mã môn học + mã nhóm + mã giảng viên, value là list chứa dữ liệu lsa
-        dic_lsa = {}
-        get_lsa_data = start_selenium.process_get_detail_lsa()
-        for d in get_lsa_data:
-            if "subject_id" not in d:
-                continue
-            key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
-            value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
-            dic_lsa[key] = value
-
+        # dic_lsa = {}
+        # get_lsa_data = start_selenium.process_get_detail_lsa()
+        # for d in get_lsa_data:
+        #     if "subject_id" not in d:
+        #         continue
+        #     key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
+        #     value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
+        #     dic_lsa[key] = value
+        temp = [2,2,'20%', '20%']
         #chỗ này sẽ chạy vòng lặp for để duyệt qua các môn học trong file excel
         for i, row in enumerate(ws_score.iter_rows(min_row=2, values_only=True), start=2):
-            # mỗi lần duyệt qua một môn học thì sẽ mở lại trang tìm kiếm môn học trên LMS 
-            # để đảm bảo rằng các bước tìm kiếm và đánh giá được thực hiện chính xác cho từng môn học, 
-            # tránh bị lỗi do trang web bị thay đổi khi duyệt qua nhiều môn học
-            driver.get(self.url_lms)
+            if ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE) + 2).value != "x":
+                # mỗi lần duyệt qua một môn học thì sẽ mở lại trang tìm kiếm môn học trên LMS 
+                # để đảm bảo rằng các bước tìm kiếm và đánh giá được thực hiện chính xác cho từng môn học, 
+                # tránh bị lỗi do trang web bị thay đổi khi duyệt qua nhiều môn học
+                driver.get(self.url_lms)
 
-            ten_subject = row[0]  # Giả sử tên môn học nằm ở cột A
-            ten_gv = row[1]       # Giả sử tên giảng viên nằm ở cột B 
-            ma_mh = row[2]       # Giả sử mã môn học nằm ở cột C
-            ma_nhom = row[3]      # Giả sử mã nhóm môn học nằm ở cột D
-            ma_gv = row[4]       # Giả sử mã giảng viên nằm ở cột E
-            
-            key_lsa = f"{ma_mh}_{ma_nhom}_{ma_gv}"
+                # subject_id = row[0] 
+                # subject_name = row[1]  
+                # teacher_id = row[8]
+                # teacher_name = row[9]      
+                # group_id = row[6] 
+                #
+                subject_id = row[2] 
+                subject_name = row[0]  
+                teacher_id = row[4]
+                teacher_name = row[1]      
+                group_id = row[3]      
+                    
+                # key_lsa = f"{subject_id}_{group_id}_{teacher_id}"
+                serch_subject = f"{subject_id} - ({teacher_id}-{group_id})"
 
-           # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, 
-           # nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, 
-           # vì những môn này chỉ cần soạn LMS hoàn chỉnh là được, không yêu cầu phải có đầy đủ các tiêu chí như các môn khác
-            if ten_subject.lower() in [subject.lower() for subject in self.NOT_RATED]:
-                print(f"✅ Môn học thuộc cách chấm chỉ hoàn thành của khoa xây dựng")
-                ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Hoàn thành"
-                continue
+                
 
-            try:
-                search_input = WebDriverWait(driver, 10).until(
-                    EC.visibility_of_element_located((By.NAME, "q"))
-                )
-                search_input.clear()
-                search_input.send_keys(ten_subject) # BADM1391 - (QT653-TN120)
-            except Exception as e:
-                    print(f"Không tìm thấy ô nhập môn học, lỗi {e}")
+                # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, 
+                # nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, 
+                # vì những môn này chỉ cần soạn LMS hoàn chỉnh là được, không yêu cầu phải có đầy đủ các tiêu chí như các môn khác
+                if subject_name.lower() in [subject.lower() for subject in self.NOT_RATED]:
+                    # print(f"✅ Môn học thuộc cách chấm chỉ hoàn thành của khoa xây dựng")
+                    ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Hoàn thành"
 
-            try:
-                # Nhấn nút tìm kiếm
-                button_find_text = "button[type='submit']"
-                button_find = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, button_find_text))
-                )
-                button_find.click()
-            except Exception as e:
-                    print(f"Không tìm thấy nút tìm môn học, lỗi {e}")
+                    print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: Hoàn thành")
+                    continue
 
-            try: 
-                # Lấy tất cả link môn học trong kết quả tìm kiếm (class="aalink")
-                get_list_subject = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "aalink"))
-                )
-                href_link_subject = get_list_subject.get_attribute("href")
-                # mở link môn học để kiểm tra các tiêu chí đánh giá cấu trúc môn học trên LMS
-                driver.get(href_link_subject)
-                # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, 
-                # cũng như ghi chú các tiêu chí chưa đạt vào file excel
-                dic_score_apply, notes = self.get_results_score(driver, model, ten_gv, dic_lsa.get(key_lsa))
-                print(dic_score_apply)
-                col_idx = column_current + 1
-                # dic_score_apply sẽ trả về dictionary
-                # for col_criteria in dic_score_apply: sẽ duyệt qua các key của dictionary
-                for col_criteria in dic_score_apply:
-                    ws_score.cell(row=i, column=col_idx).value = dic_score_apply[col_criteria]["score"]
-                    col_idx += 1
-                ws_score.cell(row=i, column=col_idx).value = notes
-                ws_score.cell(row=i, column=col_idx).alignment = Alignment(wrap_text=True)             
-               
-                driver.get(self.url_lms) # quay lại trang tìm kiếm để tiếp tục duyệt qua môn học tiếp theo
-                time.sleep(2)  # Thêm delay để dừng lại 2 giây trước khi nhập thông tin môn
-            except Exception as e:
-                # nếu không tìm thấy môn học trên LMS thì sẽ ghi "Chưa soạn LMS" vào cột điểm số và ghi chú vào file excel, sau đó tiếp tục chạy vòng lặp để duyệt qua môn học tiếp theo
-                ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Chưa soạn LMS"
+                try:
+                    search_input = WebDriverWait(driver, 10).until(
+                        EC.visibility_of_element_located((By.NAME, "q"))
+                    )
+                    search_input.clear()
+                    search_input.send_keys(serch_subject) # BADM1391 - (QT653-TN120)
+                except Exception as e:
+                        print(f"Không tìm thấy ô nhập môn học, lỗi {e}")
+
+                try:
+                    # Nhấn nút tìm kiếm
+                    button_find_text = "button[type='submit']"
+                    button_find = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, button_find_text))
+                    )
+                    button_find.click()
+                except Exception as e:
+                        print(f"Không tìm thấy nút tìm môn học, lỗi {e}")
+
+                try: 
+                    # Lấy tất cả link môn học trong kết quả tìm kiếm (class="aalink")
+                    get_list_subject = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, "aalink"))
+                    )
+                    href_link_subject = get_list_subject.get_attribute("href")
+                    # mở link môn học để kiểm tra các tiêu chí đánh giá cấu trúc môn học trên LMS
+                    driver.get(href_link_subject)
+                    # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, 
+                    # cũng như ghi chú các tiêu chí chưa đạt vào file excel
+                    # dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, dic_lsa.get(key_lsa))
+                    dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, temp)
+
+                    print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: {dic_score_apply['kqdg']['score']}")
+                    
+                    col_idx = column_current + 1
+                    # dic_score_apply sẽ trả về dictionary
+                    # for col_criteria in dic_score_apply: sẽ duyệt qua các key của dictionary
+                    for col_criteria in dic_score_apply:
+                        ws_score.cell(row=i, column=col_idx).value = dic_score_apply[col_criteria]["score"]
+                        col_idx += 1
+                    ws_score.cell(row=i, column=col_idx).value = notes
+                    ws_score.cell(row=i, column=col_idx).alignment = Alignment(wrap_text=True)             
+                
+                    driver.get(self.url_lms) # quay lại trang tìm kiếm để tiếp tục duyệt qua môn học tiếp theo
+                    time.sleep(2)  # Thêm delay để dừng lại 2 giây trước khi nhập thông tin môn
+                except Exception as e:
+                    # nếu không tìm thấy môn học trên LMS thì sẽ ghi "Chưa soạn LMS" vào cột điểm số và ghi chú vào file excel, sau đó tiếp tục chạy vòng lặp để duyệt qua môn học tiếp theo
+                    ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Chưa soạn LMS"
+                    print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: Chưa soạn LMS")
+                ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE) + 2).value = "x"
         wb_score.save(excel_file)     
         driver.quit()
         
