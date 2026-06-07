@@ -66,7 +66,8 @@ class ScoreLMS:
             "Nhận thức ngành",
             'Thực tập địa chất công trình',
             "Đồ án nền móng",
-            "Đồ án kết cấu bê tông cốt thép 1, 2",
+            "Đồ án kết cấu bê tông cốt thép 1",
+            "Đồ án kết cấu bê tông cốt thép 2",
             "Đồ án bê tông 1",
             "Đồ án bê tông 2",
             "Đồ án thi công",
@@ -122,6 +123,7 @@ class ScoreLMS:
             for row in rows:
                 try:
                     number_responses = row.find_element(By.CSS_SELECTOR, "td.text-center span").text.strip()
+        
                     if int(number_responses) == 1:
                         # try:
                         #     ten_sv = row.find_element(By.CSS_SELECTOR, "td.author .mb-1").text.strip()
@@ -132,36 +134,46 @@ class ScoreLMS:
                         except:
                             ten_reply = "Không có"
 
-                        if ten_giang_vien.lower() not in ten_reply.lower():
+                        if ten_giang_vien.lower() in ten_reply.lower():
                             flad_forum = True
                             break
-                    else:
+                    elif int(number_responses) > 1:
+                    # if int(number_responses) > 1:
                         try:
-
                             thrid_tab = driver.current_window_handle
 
-                            link_topic = row.find_element(By.CSS_SELECTOR, "th.topic a").text.strip()
+                            link_topic = row.find_element(By.CSS_SELECTOR, "th.topic a")
                             link_topic = link_topic.get_attribute("href")
+
                             driver.execute_script("window.open(arguments[0]);", link_topic)
                             driver.switch_to.window(driver.window_handles[-1])
+
                             try:
                                 list_teacher_name = []
-                                find_teacher_name = driver.find_elements(By.CSS_SELECTOR, "header .mb-2")
+                                try:
+                                    find_teacher_name = driver.find_elements(By.CSS_SELECTOR, "header.mb-2 div.mb-3")
+                                except Exception as e:
+                                    print(f"Không tìm thấy phần tử chứa tên người bình luận {e}")
                                 for item in find_teacher_name:
-                                    teacher_name = item.find_element(By.CSS_SELECTOR, "div.mb-3 a").text.strip()
-                                    list_teacher_name.append(teacher_name.lower())
+                                    try: 
+                                        teacher_name = item.find_element(By.CSS_SELECTOR, "a").text.strip()
+                                        list_teacher_name.append(teacher_name.lower())
+                                    except Exception as e:
+                                        print(f"Không tìm thấy tên người bình luận trong diễn đàn {e}")
+                                
+                                driver.close()
                                 driver.switch_to.window(thrid_tab)
                                 if list_teacher_name.count(ten_giang_vien.lower()) > 1:
                                     flad_forum = True
                                     break 
-                            except:
-                                ten_gv = "Không rõ"
+                            except Exception as e:
+                                print(f"Không tìm thấy thông tin người bình luận {e}")
 
                         except:
                             print("Không tìm thấy link topic trong diễn đàn")
 
                 except:
-                    number_responses = 0
+                    print("Không tìm thấy số lượng phản hồi trong diễn đàn")
 
             
         driver.close()
@@ -184,6 +196,7 @@ class ScoreLMS:
 
         # lấy tất cả text có trong môn học 
         full_text = driver.find_element(By.TAG_NAME, "body").text
+        # # print(full_text)
         # tách text thành từng dòng để model dự đoán,
         #vì model được train trên từng câu, nên cần tách text thành từng dòng/câu để dự đoán chính xác hơn
         lines = full_text.splitlines()  
@@ -193,6 +206,7 @@ class ScoreLMS:
         # như "bài tập", "diễn đàn", "câu hỏi thảo luận", 
         # vì những dòng này thường là các phần tử phụ trong LMS và không phải là tiêu chí đánh giá cấu trúc môn học
         lines = [line for line in lines if not any(noise in line.lower() for noise in self.NOISE_REMOVE)]
+        lines = [x for item in lines for x in item.split(',')]
         results = self.predict(model, lines)
         results = list(set(results))  # lấy kết quả duy nhất để đánh giá
 
@@ -240,24 +254,39 @@ class ScoreLMS:
         dic_score_apply["tlsvtc"]["score"] = list_lsa[2] if list_lsa else "lỗi"
         dic_score_apply["tlgvtc"]["score"] = list_lsa[3] if list_lsa else "lỗi"
 
-        all_links = driver.find_elements(By.TAG_NAME, "a")
-        for a in all_links:
-            a_href = a.get_attribute("href")
-            a_text = a.text.strip()
-            
-            if "forum" in a_href:
-                forums[a_text] = a_href
-            if "quiz" in a_href:
-                quiz[a_text] = a_href
-            if "assign" in a_href:
-                assign[a_text] = a_href
+        try:
+            link_data = []
+            all_links = driver.find_elements(By.TAG_NAME, "a")
 
-        check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if d]
-        if check_bt:
-            dic_score_apply["bt"]["score"] = 20
-            sum_score += 20
-        else:
-            notes += "\nThiếu bài tập"
+            for a in all_links:
+                try:
+                    href = a.get_attribute("href")
+                    text = a.text.strip()
+                    if href and text:
+                        link_data.append((text, href))
+                except:
+                    continue
+
+            for a_text, a_href in link_data:
+                if "forum" in a_href:
+                    forums[a_text] = a_href
+                if "quiz" in a_href:
+                    quiz[a_text] = a_href
+                if "assign" in a_href:
+                    assign[a_text] = a_href
+        except Exception as e:
+            print(f"lỗi khi lấy link diễn đàn, bài tập: {e}")        
+
+        try:
+            check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if d]
+            if check_bt:
+                dic_score_apply["bt"]["score"] = 20
+                sum_score += 20
+            else:
+                notes += "\nThiếu bài tập"
+        except Exception as e:
+            print(f"lỗi khi chấm điểm bài tập: {e}")
+        # print("đến phần điểm bài tập")
 
         # check_bt = [name for name, d in [("quiz", quiz), ("assign", assign)] if not d]
         # if not check_bt:
@@ -275,53 +304,80 @@ class ScoreLMS:
 
         # đánh giá diễn đàn, nếu có diễn đàn thì sẽ mở từng diễn đàn lên để kiểm tra xem giảng viên đã tương tác với tất cả sinh viên chưa, nếu có diễn đàn nhưng không tương tác đầy đủ thì sẽ ghi chú vào file excel, nếu có diễn đàn và tương tác đầy đủ thì sẽ được điểm tối đa, nếu không có diễn đàn nào thì sẽ không được điểm nào và ghi chú vào file excel
         if forums:
-            forum_chua_day_du = []  # lưu các diễn đàn chưa tương tác đầy đủ [(ten_forum, [sv_chua_reply])]
+            # print("có diễn đàn")
+            name_forum_no_interact = []
+            check_forum = []
             for name, forum_link in forums.items():
-                chua_reply = self.check_forum(driver, forum_link, ten_gv)
-                if chua_reply:
-                    forum_chua_day_du.append({
-                        "ten_forum": name
-                    })
-            if not forum_chua_day_du:
-                #print(f" ✅ Có diễn đàn và tương tác với tất cả sinh viên")
+                try:
+                    check_forum.append(self.check_forum(driver, forum_link, ten_gv))
+                except Exception as e:
+                    print(f"lỗi ở hàm get_results_score: {e}")
+                name_forum_no_interact.append(name)
+            
+            if True in check_forum:
                 dic_score_apply["dd"]["score"] = "x"
             else:
-               # print(f" ⚠️ Có diễn đàn nhưng không tương tác đầy đủ với sinh viên")
-                for f in forum_chua_day_du:
-                    #print(f"  📌 Forum: {f['ten_forum']}")
-                    notes += f"\nDiễn đàn '{f['ten_forum']}' chưa tương tác đầy đủ với sinh viên"
+                for f in name_forum_no_interact:  
+                    notes += f"\nDiễn đàn {name} chưa tương tác đầy đủ với sinh viên" 
+            
+
+
+            # forum_chua_day_du = []  # lưu các diễn đàn chưa tương tác đầy đủ [(ten_forum, [sv_chua_reply])]
+            # for name, forum_link in forums.items():
+            #     chua_reply = self.check_forum(driver, forum_link, ten_gv)
+            #     if chua_reply:
+            #         forum_chua_day_du.append({
+            #             "ten_forum": name
+            #         })
+            # if not forum_chua_day_du:
+            #     #print(f" ✅ Có diễn đàn và tương tác với tất cả sinh viên")
+            #     dic_score_apply["dd"]["score"] = "x"
+            # else:
+            #    # print(f" ⚠️ Có diễn đàn nhưng không tương tác đầy đủ với sinh viên")
+            #     for f in forum_chua_day_du:
+            #         #print(f"  📌 Forum: {f['ten_forum']}")
+            #         notes += f"\nDiễn đàn '{f['ten_forum']}' chưa tương tác đầy đủ với sinh viên"
         else:
             #print(f" ❌ Không có diễn đàn nào")
-            notes += "\nKhông có diễn đàn"   
+            notes += "\nKhông có diễn đàn" 
+            # print("không có diễn đàn")
 
-        score_basic = [
-            dic_score_apply["ctdd"]["score"] == 15,
-            dic_score_apply["ttkh"]["score"] == 10,
-            dic_score_apply["mtht"]["score"] == 20,
-            dic_score_apply["ttbg"]["score"] == 20,
-            dic_score_apply["bdgk"]["score"] == 15,
-            float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 70,
-            float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0,
-            sum_score >= 50
-        ]
-
-        if all(score_basic):
-            dic_score_apply["kqdg"]["score"] = "Đạt cơ bản"
-
-            score_advance = [
-                dic_score_apply["dd"]["score"] == "x",
-                dic_score_apply["bt"]["score"] == 20,
-                float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 90,
-                float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0,
-                sum_score >= 80
+        try:
+            score_basic = [
+                dic_score_apply["ctdd"]["score"] == 15,
+                dic_score_apply["ttkh"]["score"] == 10,
+                dic_score_apply["mtht"]["score"] == 20,
+                dic_score_apply["ttbg"]["score"] == 20,
+                dic_score_apply["bdgk"]["score"] == 15,
+                sum_score >= 50
             ]
-            if all(score_advance):
-                dic_score_apply["kqdg"]["score"] = "Xem xét nâng cao"
 
-        else:
-            dic_score_apply["kqdg"]["score"] = "Chưa đạt cơ bản"
+            if all(score_basic):
+                if dic_score_apply["tlsvtc"]["score"] == "lỗi" or dic_score_apply["tlgvtc"]["score"] == "lỗi":
+                    dic_score_apply["kqdg"]["score"] = "Thiếu % để xét đạt cơ bản" 
+                else:
+                    if float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 70 and float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0:
+                        dic_score_apply["kqdg"]["score"] = "Đạt cơ bản"
 
-        return [dic_score_apply, notes] 
+                score_advance = [
+                    dic_score_apply["dd"]["score"] == "x",
+                    dic_score_apply["bt"]["score"] == 20,
+                    sum_score >= 80
+                ]
+                if all(score_advance):
+                    if dic_score_apply["tlsvtc"]["score"] == "lỗi" or dic_score_apply["tlgvtc"]["score"] == "lỗi":
+                        dic_score_apply["kqdg"]["score"] = "Thiếu % để xét nâng cao"
+                    else:
+                        if float(dic_score_apply["tlsvtc"]["score"].replace('%', '')) >= 90 and float(dic_score_apply["tlgvtc"]["score"].replace('%', '')) > 0:
+                            dic_score_apply["kqdg"]["score"] = "Đạt nâng cao"
+
+            else:
+                dic_score_apply["kqdg"]["score"] = "Chưa đạt cơ bản"
+        except Exception as e:
+            print(f"Bị lỗi khi lấy phần trăm giảng viên và sinh viên lsa")
+
+        return [dic_score_apply, notes]
+        
 
     def test_lsa(self):
 
@@ -351,13 +407,13 @@ class ScoreLMS:
             print(dic_lsa.get(key_lsa))
 
 
-    def score_lms(self):
+    def score_lms(self): 
         
         model_file = os.path.join(self.base_dir, "AI", "model", "model_vi_classification_v2.pkl")
         model = joblib.load(model_file)
 
-        excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","test.xlsx")
-        # excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","2025-06-04_251_email-nhom-mh-hk.xlsx")
+        # excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","test2.xlsx")
+        excel_file = os.path.join(self.base_dir, "data", "input", "score_lms","251","2025-06-04_251_email-nhom-mh-hk.xlsx")
         wb_score = load_workbook(excel_file)
         ws_score = wb_score.active
 
@@ -377,15 +433,17 @@ class ScoreLMS:
         driver = start_selenium.login_selenium(self.url_lms)
 
         # tạo dictionary với key là mã môn học + mã nhóm + mã giảng viên, value là list chứa dữ liệu lsa
-        # dic_lsa = {}
-        # get_lsa_data = start_selenium.process_get_detail_lsa()
-        # for d in get_lsa_data:
-        #     if "subject_id" not in d:
-        #         continue
-        #     key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
-        #     value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
-        #     dic_lsa[key] = value
-        temp = [2,2,'20%', '20%']
+        dic_lsa = {}
+        get_lsa_data = start_selenium.process_get_detail_lsa()
+        for d in get_lsa_data:
+            if "subject_id" not in d:
+                continue
+            key = f"{d['subject_id']}_{d['group_id']}_{d['teacher_id']}"
+            value = [d["count_total_student"], d["count_student_access"], d["percent_student_access"], d["percent_teacher_access"]]
+            dic_lsa[key] = value
+
+        # temp = [2,2,'90%', '90%']
+
         #chỗ này sẽ chạy vòng lặp for để duyệt qua các môn học trong file excel
         for i, row in enumerate(ws_score.iter_rows(min_row=2, values_only=True), start=2):
             if ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE) + 2).value != "x":
@@ -394,22 +452,21 @@ class ScoreLMS:
                 # tránh bị lỗi do trang web bị thay đổi khi duyệt qua nhiều môn học
                 driver.get(self.url_lms)
 
-                # subject_id = row[0] 
-                # subject_name = row[1]  
-                # teacher_id = row[8]
-                # teacher_name = row[9]      
-                # group_id = row[6] 
-                #
-                subject_id = row[2] 
-                subject_name = row[0]  
-                teacher_id = row[4]
-                teacher_name = row[1]      
-                group_id = row[3]      
-                    
-                # key_lsa = f"{subject_id}_{group_id}_{teacher_id}"
-                serch_subject = f"{subject_id} - ({teacher_id}-{group_id})"
+                subject_id = row[0] 
+                subject_name = row[1]  
+                teacher_id = row[8]
+                teacher_name = row[9]      
+                group_id = row[6] 
 
-                
+                # test
+                # subject_id = row[2] 
+                # subject_name = row[0]  
+                # teacher_id = row[4]
+                # teacher_name = row[1]      
+                # group_id = row[3]      
+                    
+                key_lsa = f"{subject_id}_{group_id}_{teacher_id}"
+                serch_subject = f"{subject_id} - ({teacher_id}-{group_id})"
 
                 # kiểm tra xem môn học có thuộc danh sách các môn không đánh giá điểm LMS của khoa xây dựng hay không, 
                 # nếu có thì sẽ ghi "Hoàn thành" vào cột điểm số và bỏ qua các bước kiểm tra tiếp theo, 
@@ -417,7 +474,7 @@ class ScoreLMS:
                 if subject_name.lower() in [subject.lower() for subject in self.NOT_RATED]:
                     # print(f"✅ Môn học thuộc cách chấm chỉ hoàn thành của khoa xây dựng")
                     ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Hoàn thành"
-
+                    ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE) + 2).value = "x"
                     print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: Hoàn thành")
                     continue
 
@@ -448,12 +505,16 @@ class ScoreLMS:
                     href_link_subject = get_list_subject.get_attribute("href")
                     # mở link môn học để kiểm tra các tiêu chí đánh giá cấu trúc môn học trên LMS
                     driver.get(href_link_subject)
+                    
                     # gọi hàm get_results_score để đánh giá các tiêu chí và lấy điểm số áp dụng cho từng tiêu chí, 
                     # cũng như ghi chú các tiêu chí chưa đạt vào file excel
-                    # dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, dic_lsa.get(key_lsa))
-                    dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, temp)
-
-                    print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: {dic_score_apply['kqdg']['score']}")
+                    
+                    try:
+                        dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, dic_lsa.get(key_lsa))
+                        # dic_score_apply, notes = self.get_results_score(driver, model, teacher_name, temp)
+                        print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: {dic_score_apply['kqdg']['score']}")
+                    except Exception as e:
+                        print(f"lỗi ở hàm score_lms: {e}")
                     
                     col_idx = column_current + 1
                     # dic_score_apply sẽ trả về dictionary
@@ -470,8 +531,9 @@ class ScoreLMS:
                     # nếu không tìm thấy môn học trên LMS thì sẽ ghi "Chưa soạn LMS" vào cột điểm số và ghi chú vào file excel, sau đó tiếp tục chạy vòng lặp để duyệt qua môn học tiếp theo
                     ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE)).value = "Chưa soạn LMS"
                     print(f"kết quả xử lý môn {subject_name} - {teacher_name} - {group_id}: Chưa soạn LMS")
+                    # print(f"no: {subject_name} - {teacher_name} - {group_id}")
                 ws_score.cell(row=i, column=column_current + len(self.DIC_SCORE_BASE) + 2).value = "x"
-        wb_score.save(excel_file)     
+                wb_score.save(excel_file)     
         driver.quit()
         
 test = ScoreLMS()
