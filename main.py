@@ -14,19 +14,19 @@ import schedule
 import time
 import logging
 from datetime import datetime
-from automation.add_students_to_lms.run import UpdateStudents
+# from automation.add_students_to_lms.run import UpdateStudents
 from automation.report_perform_lms.run import ReportPerformLMS
 
 
-def job_update_students():
-    today = datetime.today()
-    print(f"{today} Bắt đầu job cập nhật sinh viên LMS")
-    try:
-        ob = UpdateStudents()
-        ob.update_student_lms()
-        print(f"{today} Hoàn tất job cập nhật sinh viên LMS")
-    except Exception as e:
-        print(f"{today} Lỗi job cập nhật sinh viên LMS: {e}")
+# def job_update_students():
+    # today = datetime.today()
+    # print(f"{today} Bắt đầu job cập nhật sinh viên LMS")
+    # try:
+        # ob = UpdateStudents()
+        # ob.update_student_lms()
+        # print(f"{today} Hoàn tất job cập nhật sinh viên LMS")
+    # except Exception as e:
+        # print(f"{today} Lỗi job cập nhật sinh viên LMS: {e}")
 
 
 def job_report_lms():
@@ -43,10 +43,10 @@ def job_report_lms():
 
 
 # Cập nhật sinh viên mỗi ngày lúc 17:00
-schedule.every().day.at("17:00").do(job_update_students)
+# schedule.every().day.at("17:00").do(job_update_students)
 
 # Báo cáo tình hình LMS mỗi thứ 2 lúc 08:00
-schedule.every().monday.at("08:39").do(job_report_lms)
+schedule.every().monday.at("09:13").do(job_report_lms)
 
 
 if __name__ == "__main__":

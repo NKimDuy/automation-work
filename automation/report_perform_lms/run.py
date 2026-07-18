@@ -524,3 +524,6 @@ class ReportPerformLMS:
             # Lưu file báo cáo tuần
             wb_report_lms.save(file_report_lms)
 
+
+ob = ReportPerformLMS()
+ob.report_perform_lms("2026-06-01", "2026-06-05")
