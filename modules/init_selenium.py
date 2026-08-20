@@ -19,9 +19,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
-from selenium.webdriver.chrome.service import Service
 from config.settings import user_lms, password_lms, captcha
-from config.settings import semester
+from config.settings import semester_general
 from utils.api import APIHandler
 import time
 import re
@@ -68,7 +67,8 @@ class InitSelenium:
             chrome_options.add_experimental_option("useAutomationExtension", False)
 
             # Khởi tạo driver với Chrome mặc định của hệ thống (không cần chỉ định service)
-            driver = webdriver.Chrome()
+            driver = webdriver.Chrome(options=chrome_options)
+            # driver = webdriver.Chrome()
             return driver
 
 
@@ -170,7 +170,6 @@ class InitSelenium:
 
             return driver
 
-
       def process_get_detail_lsa(self):
             """Đăng nhập LSA và scraping bảng danh sách môn học trong học kỳ hiện tại.
 
@@ -184,11 +183,11 @@ class InitSelenium:
               7. Đóng driver và trả về danh sách
 
             Regex pattern dùng để parse text ô môn học:
-              "[251] FINA2343 - Tài chính doanh nghiệp (TN303-01) ... Giảng viên 1. Nguyễn Văn A"
+              "[251] FINA2343 - Tài chính doanh nghiệp (TX101-TN303) ... Giảng viên 1. Nguyễn Văn A"
               → subject_id = "FINA2343"
               → subject_name = "Tài chính doanh nghiệp"
-              → teacher_id = "TN303"   (đây thực ra là room/phòng, không phải mã GV)
-              → group_id = "01"
+              → teacher_id = "TX101"   mã giảng viên
+              → group_id = "TN303"
               → teacher_name = "Nguyễn Văn A"
 
             Trả về:
@@ -196,8 +195,8 @@ class InitSelenium:
                     - lms_id               : ID môn trên LMS (số nguyên dạng string)
                     - subject_id           : mã môn học, ví dụ "FINA2343"
                     - subject_name         : tên môn học
-                    - teacher_id           : mã phòng học / giảng viên
-                    - group_id             : mã nhóm, ví dụ "01"
+                    - teacher_id           : mã giảng viên
+                    - group_id             : mã nhóm, ví dụ "TN303"
                     - teacher_name         : tên giảng viên
                     - count_total_student  : tổng số sinh viên
                     - count_student_access : số SV đã truy cập LMS
@@ -206,43 +205,34 @@ class InitSelenium:
             """
             driver = self.login_selenium(self.url_lsa)
 
-            # Bước 1: Chọn học kỳ từ dropdown (ID="moodlesiteid")
-            # Text option dạng: "[LIVE] LMS ĐTTX 251"
             try:
+                  # Bước 1: Chọn học kỳ từ dropdown (ID="moodlesiteid")
+                  # Text option dạng: "[LIVE] LMS ĐTTX 251"
                   dropdown_semester = WebDriverWait(driver, 15).until(
                         EC.presence_of_element_located((By.ID, "moodlesiteid"))
                   )
                   select_type_semester = Select(dropdown_semester)
-                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS ĐTTX", semester]))
-            except Exception as e:
-                  print(f"Không tìm thấy dropdownlist thể hiện học kỳ, lỗi {e}")
+                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS TX", semester_general]))
 
             # Bước 2: Hiển thị menu ẩn bằng JavaScript rồi click vào link overview
             # Menu bị ẩn bằng CSS display:none → cần execute_script để hiển thị
-            try:
                   driver.execute_script("arguments[0].style.display='block';", driver.find_element(By.ID, "menu_1_sub"))
                   overview_link = WebDriverWait(driver, 20).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[href*='usersiteoverviews']"))
                   )
                   overview_link.click()
-            except Exception as e:
-                  print(f"Không tìm thấy nút report, lỗi {e}")
 
             # Bước 3: Chờ bảng môn học tải — timeout 40s vì bảng có thể rất lớn
-            try:
-                  table = WebDriverWait(driver, 40).until(
+                  WebDriverWait(driver, 40).until(
                         EC.presence_of_element_located((By.ID, "ourptlistcourse"))
                   )
-            except Exception as e:
-                  print(f"Không tìm thấy bảng, lỗi {e}")
 
             # Bước 4: Lấy tất cả dòng <tr> trong bảng
-            try:
                   rows = WebDriverWait(driver, 20).until(
                         EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
                   )
             except Exception as e:
-                  print(f"Không tìm thấy các dòng, lỗi {e}")
+                  print(f"lỗi {e}")
 
             get_subject = []
             try:
@@ -252,7 +242,7 @@ class InitSelenium:
                         cells = row.find_elements(By.XPATH, ".//td")
                         for idx_cell, cell in enumerate(cells):
                               # Tìm ô nào bắt đầu bằng "[251]" — đó là ô chứa thông tin môn học
-                              if cell.text.startswith("[" + semester + "]"):
+                              if cell.text.startswith("[" + semester_general + "]"):
                                     # Các ô xung quanh chứa số liệu thống kê:
                                     # idx_cell - 1 : lms_id
                                     # idx_cell + 2 : tổng số SV
@@ -267,13 +257,16 @@ class InitSelenium:
 
                                     # Regex parse nội dung ô môn học
                                     # Format: "[251] FINA2343 - Tên môn (Room-Nhóm) ... Giảng viên 1. Tên GV"
-                                    pattern = rf"\[{semester}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-(\w+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
+                                    #pattern = rf"\[{semester}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-(\w+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
+                                    pattern = rf"\[{semester_general}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-([\w,]+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
                                     match = re.search(pattern, cell.text, re.DOTALL)
                                     if match:
                                           temp["subject_id"] = match.group(1)    # mã môn, ví dụ "FINA2343"
                                           temp["subject_name"] = match.group(2)  # tên môn học
-                                          temp["teacher_id"] = match.group(3)    # mã phòng/nhóm, ví dụ "TN303"
-                                          temp["group_id"] = match.group(4)      # nhóm, ví dụ "01"
+                                          temp["teacher_id"] = match.group(3)    # mã giảng viên
+                                          # sẽ có môn học có từ 2 mã nhóm trở lên, mà 2 mã nhóm đó giống nhau
+                                          # nên lấy nhóm đầu tiên 
+                                          temp["group_id"] = match.group(4).split(",")[0]      
                                           temp["teacher_name"] = match.group(5)  # tên giảng viên
 
                                     get_subject.append(temp)
@@ -324,40 +317,40 @@ class InitSelenium:
                   for i in range(3):
                         try:
                               # URL TKB của đơn vị: nhhk = "20" + semester (ví dụ "20251")
-                              driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk={"".join(["20", semester])}&madp={unit[0]}")
+                              driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk=20{semester_general}&madp={unit[0]}")
+
+                              WebDriverWait(driver, 40).until(
+                                    EC.any_of(
+                                          EC.presence_of_element_located((By.ID, "table_tkbcs")),
+                                          EC.presence_of_element_located((By.CLASS_NAME, "dt-empty")),
+                                    )
+                              )
+
+                              if driver.find_elements(By.CLASS_NAME, "dt-empty"):
+                                    break  # Không có môn học trong đơn vị này → bỏ qua, không thử lại
 
                               # Chờ bảng TKB tải — timeout 40s vì dữ liệu có thể lớn
-                              try:
-                                    table = WebDriverWait(driver, 40).until(
-                                          EC.presence_of_element_located((By.ID, "table_tkbcs"))
-                                    )
-                              except Exception as e:
-                                    print(f"Không tìm thấy bảng, lỗi {e}")
-
+                              # table = WebDriverWait(driver, 40).until(
+                              #       EC.presence_of_element_located((By.ID, "table_tkbcs"))
+                              # )
                               # Lấy tất cả dòng <tr> trong bảng
-                              try:
-                                    rows = WebDriverWait(driver, 20).until(
-                                          EC.presence_of_all_elements_located((By.XPATH, ".//tr"))
-                                    )
-                              except Exception as e:
-                                    print(f"Không tìm thấy các dòng, lỗi {e}")
-
+                              table = driver.find_element(By.ID, "table_tkbcs")
+                              rows = table.find_elements(By.XPATH, ".//tr")
                               # Duyệt từng dòng, bỏ qua dòng header (không có <td>)
-                              try:
-                                    for row in rows:
-                                          cells = row.find_elements(By.XPATH, ".//td")
-                                          if cells:
-                                                # Key: "nhóm-mã_môn", ví dụ "SG001-ACCO4331"
-                                                # Value: [mã_GV, tên_GV]
-                                                get_teacher_and_subject["-".join([cells[3].text, cells[2].text])] = [cells[8].text, cells[9].text]
-                              except Exception as e:
-                                    print(f"Không in được dữ liệu, lỗi {e}")
-
+                              for row in rows:
+                                    cells = row.find_elements(By.XPATH, ".//td")
+                                    if cells:
+                                          # Key: "nhóm-mã_môn", ví dụ "SG001-ACCO4331"
+                                          # Value: [mã_GV, tên_GV]
+                                          get_teacher_and_subject["-".join([cells[3].text, cells[2].text])] = [cells[8].text, cells[9].text]
+ 
                               break  # Thành công → thoát vòng thử lại, sang đơn vị tiếp theo
 
                         except Exception as e:
-                              print(f"Lần {i + 1} thất bại")
+                              print(f"[{unit[0]}]Lần {i + 1} thất bại")
                               time.sleep(2)  # Đợi 2 giây trước khi thử lại
+                  else:
+                        print(f"Không lấy được bảng TKB của đơn vị {unit[1]} ({unit[0]})")
 
             driver.quit()
             return get_teacher_and_subject

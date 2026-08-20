@@ -20,6 +20,7 @@
 #   python -m automation.report_perform_lms.run
 # =============================================================================
 
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -31,7 +32,8 @@ from modules.init_selenium import InitSelenium
 from utils.config_loader import ConfigLoader
 from utils.logger import setup_logger
 from utils.api import APIHandler
-from config.settings import semester
+from config import settings
+from config import paths
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -43,24 +45,11 @@ import re
 
 
 class ReportPerformLMS:
-
-      def test(self):
-            """Hàm thử nghiệm: in ra danh sách nhóm-môn học lấy được từ LSA.
-
-            Dùng để kiểm tra nhanh xem scraping LSA có hoạt động đúng không.
-            Không dùng trong luồng chính.
-            """
-            start_selenium = InitSelenium()
-            # Lấy danh sách môn học từ LSA thông qua Selenium
-            list_lsa = start_selenium.process_get_detail_lsa()
-            try:
-                  for ls in list_lsa:
-                        if ls["group_id"] and ls["subject_id"]:
-                              # In ra theo định dạng "nhóm-mã môn", ví dụ: "SG001-ACCO4331"
-                              print("-".join([ls["group_id"], ls["subject_id"]]))
-            except Exception as e:
-                  print(f"An error occurred: {e}")
-
+      def __init__(self):
+            # Thư mục lưu báo cáo tuần
+            self.folder_track_lms = paths.report_perform_lms_folder(settings.semester_general) 
+            # Đường dẫn file tích lũy (các môn chưa soạn LMS, ghi thêm mỗi tuần)
+            self.file_track_no_lms = os.path.join(self.folder_track_lms, settings.track_no_lms_filename)
 
       def get_last_week_range(self):
             """Tính khoảng ngày của tuần trước (thứ 2 → chủ nhật).
@@ -86,7 +75,6 @@ class ReportPerformLMS:
 
             return last_monday.strftime("%Y-%m-%d"), last_sunday.strftime("%Y-%m-%d")
 
-
       def get_department_of_subject(self):
             """Đọc file Excel ánh xạ mã môn học → tên khoa từ file cấu hình.
 
@@ -102,9 +90,7 @@ class ReportPerformLMS:
                    Nếu file lớn và chậm, có thể cache kết quả lại bằng cách gán vào self.
             """
             # Tìm đường dẫn tuyệt đối đến thư mục gốc của project (lên 3 cấp từ file này)
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            file = os.path.join(base_dir, "config", "excel", "mon_hoc_khoa.xlsx")
-            wb = load_workbook(file)
+            wb = load_workbook(paths.SUBJECT_DEPARTMENT_FILE)
             ws = wb.active
             dict_subject_department = {}
             # Bỏ qua hàng đầu tiên (header), bắt đầu đọc từ hàng 2
@@ -114,8 +100,7 @@ class ReportPerformLMS:
                   dict_subject_department[subject_code] = department
             return dict_subject_department
 
-
-      def report_perform_lms(self, from_day, to_day):
+      def report_perform_lms(self):
             """Pipeline chính: tổng hợp và xuất báo cáo tình hình soạn thảo LMS.
 
             Tham số:
@@ -141,11 +126,14 @@ class ReportPerformLMS:
             #   { "nhóm-mã_môn": [mã_giảng_viên, tên_giảng_viên], ... }
             # Ví dụ: { "SG001-ACCO4331": ["TX001", "Nguyễn Văn A"] }
             start_selenium = InitSelenium()
+
+            print(f"Bắt đầu lấy dữ liệu PHDT...")
             get_info_teacher = start_selenium.process_get_detail_phdt()
 
             # --- BƯỚC 2: Lấy danh sách môn học đã ghi danh trên LSA ---
             # process_get_detail_lsa() trả về list các dict, mỗi dict có:
             #   lms_id, subject_id, subject_name, teacher_id, teacher_name, group_id, ...
+            print(f"Bắt đầu lấy dữ liệu LSA")
             list_lsa = start_selenium.process_get_detail_lsa()
 
             # Tạo list các key "nhóm-mã_môn" để đối chiếu nhanh sau này
@@ -153,26 +141,31 @@ class ReportPerformLMS:
             get_group_subject_in_lsa = []
             try:
                   for item in list_lsa:
-                        key = "-".join([item["group_id"], item["subject_id"]])
-                        get_group_subject_in_lsa.append(key)
+                        if item["group_id"] and item["subject_id"]:
+                              key = "-".join([item["group_id"], item["subject_id"]])
+                              get_group_subject_in_lsa.append(key)
             except Exception as e:
                   print(f"Không có dữ liệu môn học: {e}")
 
             # --- BƯỚC 3: Gọi API lấy toàn bộ môn học theo từng đơn vị ---
             api_handler = APIHandler()
             # get_unit() trả về [[MaDP, TenDP], ...] — danh sách các đơn vị (khoa/trung tâm)
+            print(f"Bắt đầu lấy dữ liệu môn học từ API...")
             list_unit = api_handler.get_unit()
 
-            # Chuyển chuỗi ngày sang datetime để so sánh
+            # Lấy ngày thứ 2 và chủ nhật của tuần trước
+            from_day, to_day = self.get_last_week_range()
             from_day = datetime.strptime(from_day, "%Y-%m-%d")
             to_day = datetime.strptime(to_day, "%Y-%m-%d")
+
+            print(f"Bắt đầu lọc môn học có TUNGAYTKB từ {from_day} đến {to_day}...")
 
             # Bảng ánh xạ mã khoa (từ file Excel) sang tên khoa hiển thị trong báo cáo
             # Mã khoa dạng "TX.XXXX" là mã nội bộ, cần đổi sang tên đọc được
             department_dic = {
                   "TX.NNNN": "Ngoại ngữ",
                   "TX.LALA": "Luật",
-                  "TX.LA": "Luật",
+                  "TX.LA"  : "Luật",
                   "TX.CBML": "Cơ bản",
                   "TX.CBCB": "Cơ bản",
                   "TX.XHXH": "XHH-CTXH-ĐNA",
@@ -182,6 +175,7 @@ class ReportPerformLMS:
                   "TX.SHSH": "Công Nghệ Sinh Học",
                   "TX.KIKI": "Kinh tế và quản lý công",
                   "TX.KTKT": "Xây dựng",
+                  "TX.NNTA": "Ngoại ngữ"
             }
 
             # --- BƯỚC 4: Lọc môn học theo khoảng ngày TKB và tổng hợp dữ liệu ---
@@ -192,7 +186,7 @@ class ReportPerformLMS:
 
             for unit in list_unit:
                   # Lấy danh sách môn học theo từng đơn vị và học kỳ hiện tại
-                  list_subject = api_handler.get_subject_from_api(semester, unit[0])
+                  list_subject = api_handler.get_subject_from_api(settings.semester_general, unit[0])
                   for subject in list_subject:
                         # Bỏ qua môn chưa có ngày bắt đầu TKB
                         if subject["TUNGAYTKB"] is not None:
@@ -218,7 +212,7 @@ class ReportPerformLMS:
                                                 subject["TenDP"],       # tên đơn vị
                                                 get_info_teacher[key][0],  # mã giảng viên (từ PHDT)
                                                 get_info_teacher[key][1],  # tên giảng viên (từ PHDT)
-                                                from_day.strftime("%d-%m-%Y")  # ngày bắt đầu TKB
+                                                datetime.strptime(subject["TUNGAYTKB"], "%Y-%m-%d")  # ngày bắt đầu TKB
                                           ]
                                     else:
                                           # Nếu key đã tồn tại (cùng nhóm-môn nhưng khác lớp)
@@ -232,8 +226,10 @@ class ReportPerformLMS:
             for key_sb, value_sb in list_report_lms.items():
                   if key_sb in get_group_subject_in_lsa:
                         list_report_lms[key_sb].append("x")   # đã ghi danh trên LMS
+                        print(f"Môn {value_sb[3]} - {value_sb[1]} - {value_sb[8]}: Đã soạn LMS")
                   else:
                         list_report_lms[key_sb].append("")     # chưa ghi danh trên LMS
+                        print(f"Môn {value_sb[3]} - {value_sb[1]} - {value_sb[8]}: Chưa soạn LMS")
 
             # --- BƯỚC 6: Chuyển dict sang list các dict để truyền vào hàm xuất Excel ---
             # Mỗi phần tử là 1 dict với các key cố định cho dễ đọc
@@ -257,7 +253,6 @@ class ReportPerformLMS:
             # --- BƯỚC 7: Xuất file Excel báo cáo ---
             self.decor_report_perform_lms(list_lms_add_to_report, from_day.strftime("%d-%m-%Y"), to_day.strftime("%d-%m-%Y"))
 
-
       def set_dimension_column(self, name_sheet, title_header):
             """Tự động căn chỉnh độ rộng cột theo nội dung dài nhất trong cột đó.
 
@@ -274,16 +269,13 @@ class ReportPerformLMS:
 
                   # Duyệt qua tất cả ô trong cột
                   for row in name_sheet[column_letter]:
-                        try:
-                              if len(str(row.value)) > max_length:
-                                    max_length = len(str(row.value))
-                        except:
-                              pass
+                        value_length = len(str(row.value))
+                        if value_length > max_length:
+                              max_length = value_length
 
                   # Set độ rộng với padding, giới hạn tối đa 100 ký tự để tránh cột quá rộng
                   adjusted_width = min(max_length + 10, 100)
                   name_sheet.column_dimensions[column_letter].width = adjusted_width
-
 
       def decor_report_perform_lms(self, data, from_day, to_day):
             """Xuất dữ liệu báo cáo ra file Excel với định dạng đẹp.
@@ -306,18 +298,13 @@ class ReportPerformLMS:
                 from_day: ngày bắt đầu (dd-mm-yyyy) — dùng để đặt tên file
                 to_day  : ngày kết thúc (dd-mm-yyyy) — dùng để đặt tên file
             """
-            # Xác định đường dẫn thư mục output theo học kỳ
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            folder_track_lms = os.path.join(base_dir, "data", "output", "report_perform_lms", semester)
-            os.makedirs(folder_track_lms, exist_ok=True)  # tạo thư mục nếu chưa có
+            # tạo thư mục lưu trữ báo cáo LMS nếu chưa có
+            os.makedirs(self.folder_track_lms, exist_ok=True)  
 
-            # Đường dẫn file tích lũy (các môn chưa soạn LMS, ghi thêm mỗi tuần)
-            flle_track_no_lms = os.path.join(folder_track_lms, "__danh_sach_khong_thuc_hien_lms.xlsx")
-
-            # Đường dẫn file báo cáo tuần (tên chứa khoảng ngày)
-            name_file = f"BC Tình hình soạn thảo LMS HK {semester} từ ngày ({from_day} đến ngày {to_day}).xlsx"
-            file_report_lms = os.path.join(folder_track_lms, name_file)
-
+            # Đường dẫn file báo cáo tuần (tên chứa khoảng ngày) 
+            name_file_report = f"BC Tình hình soạn thảo LMS HK {settings.semester_general} từ ngày ({from_day} đến ngày {to_day}).xlsx"
+            file_report_lms = os.path.join(self.folder_track_lms, name_file_report)
+            
             # Tạo workbook mới cho báo cáo tuần
             wb_report_lms = Workbook()
             # openpyxl tự tạo sheet tên "Sheet" mặc định → xóa đi để tự tạo lại đúng tên
@@ -334,7 +321,8 @@ class ReportPerformLMS:
             summary_report = []
             # Hàng tổng cộng ở cuối bảng tổng quan
             footer_sheet_general = ["Tổng cộng", 0, 0, 0]
-
+            
+            #data: [{department: a, has_lms: x/no_x}, ...]
             for dic in data:
                   dept = dic['department']
                   has_lms = dic['has_lms']
@@ -435,15 +423,15 @@ class ReportPerformLMS:
             # =========================================================
             # Nếu file chưa tồn tại (lần đầu chạy) → tạo mới với header
             # Header file tích lũy bỏ cột STT và cột "Đã soạn LMS" (vì toàn bộ đều chưa soạn)
-            if not os.path.exists(flle_track_no_lms):
+            if not os.path.exists(self.file_track_no_lms):
                   wb_new_file_track_no_lms = Workbook()
                   ws_new_file_track_no_lms = wb_new_file_track_no_lms.active
                   # header_sheet_detail[1:-1] → bỏ cột đầu (STT) và cột cuối (Đã soạn LMS)
                   ws_new_file_track_no_lms.append(header_sheet_detail[1:-1])
-                  wb_new_file_track_no_lms.save(flle_track_no_lms)
+                  wb_new_file_track_no_lms.save(self.file_track_no_lms)
 
             # Mở file tích lũy để ghi thêm (append) — không ghi đè toàn bộ file
-            wb_file_track_no_lms = load_workbook(flle_track_no_lms)
+            wb_file_track_no_lms = load_workbook(self.file_track_no_lms)
             ws_file_track_no_lms = wb_file_track_no_lms.active
             # Tìm hàng cuối cùng hiện có, dữ liệu mới sẽ ghi từ hàng tiếp theo
             row_in_sheet_no_lms = ws_file_track_no_lms.max_row + 1
@@ -451,11 +439,12 @@ class ReportPerformLMS:
             # =========================================================
             # DUYỆT TỪNG MÔN HỌC → GHI VÀO SHEET CHI TIẾT + FILE TÍCH LŨY
             # =========================================================
-            row_in_sheet_detail = 2  # bắt đầu ghi từ hàng 2 (hàng 1 là header)
+            row_in_sheet_detail = 2  # bắt đầu ghi từ hàng 2 (hàng 1 là header) 
+            #data: [{}, ...]
             for subject in data:
                   # Màu nền mặc định: trắng (đã soạn LMS)
                   has_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-
+ 
                   if subject['has_lms'] != 'x':
                         # Môn CHƯA soạn LMS → tô nền vàng để dễ nhận biết
                         has_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
@@ -503,20 +492,20 @@ class ReportPerformLMS:
                   cell.fill = has_fill
 
                   # Ghi các trường dữ liệu của môn học vào các cột tiếp theo
-                  col_in_sheet_derail = 2
+                  col_in_sheet_detail = 2
                   for key, value in subject.items():
-                        cell = sheet_detail.cell(row=row_in_sheet_detail, column=col_in_sheet_derail)
+                        cell = sheet_detail.cell(row=row_in_sheet_detail, column=col_in_sheet_detail)
                         cell.value = value
                         cell.font = data_font
                         cell.alignment = data_alignment
                         cell.border = border_style
                         cell.fill = has_fill
 
-                        col_in_sheet_derail += 1
+                        col_in_sheet_detail += 1
                   row_in_sheet_detail += 1  # chuyển sang hàng tiếp theo trong sheet Chi tiết
 
             # Lưu file tích lũy sau khi đã ghi xong tất cả môn chưa soạn
-            wb_file_track_no_lms.save(flle_track_no_lms)
+            wb_file_track_no_lms.save(self.file_track_no_lms)
 
             # Tự động căn chỉnh độ rộng cột cho sheet chi tiết
             self.set_dimension_column(sheet_detail, header_sheet_detail)
@@ -525,5 +514,6 @@ class ReportPerformLMS:
             wb_report_lms.save(file_report_lms)
 
 
-ob = ReportPerformLMS()
-ob.report_perform_lms("2026-06-01", "2026-06-05")
+if __name__ == "__main__":
+      ob = ReportPerformLMS()
+      ob.report_perform_lms()

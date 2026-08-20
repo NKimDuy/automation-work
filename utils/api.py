@@ -66,7 +66,7 @@ class APIHandler:
             subjects = []
             # Tham số truy vấn gửi lên API
             params = {
-                  "nhhk": semester,   # học kỳ, ví dụ "20251"
+                  "nhhk": semester,   # học kỳ, ví dụ "251"
                   "madp": unit_id     # mã đơn vị, ví dụ "SG"
             }
             call_api = requests.get(self.api_subject, headers=self.headers, params=params)
