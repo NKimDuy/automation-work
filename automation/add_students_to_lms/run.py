@@ -28,7 +28,7 @@ from modules.init_selenium import InitSelenium
 from utils.config_loader import ConfigLoader
 from utils.logger import setup_logger
 from db.connect_mysql import get_connection
-from config import paths, settings
+from config import paths, runtime_settings
 import os
 import time
 import re
@@ -42,9 +42,12 @@ class UpdateStudents:
             URL này dùng để đăng nhập vào LMS (cần mở 1 trang LMS bất kỳ trước),
             sau đó từng môn sẽ được truy cập bằng URL ghi danh riêng.
             """
+            # học kỳ hiện tại — lấy qua runtime_settings để sửa được trên GUI (tab "Cài đặt"),
+            # không cần build lại app mỗi học kỳ
+            self.semester_general = runtime_settings.load()["semester_general"]
             # URL trang search môn học trên LMS — dùng làm trang đích khi đăng nhập
             # Sau khi đăng nhập xong, driver sẽ dùng URL ghi danh riêng cho từng môn
-            self.url_lms = f"https://lms.oude.edu.vn/{settings.semester_general}/course/search.php"
+            self.url_lms = f"https://lms.oude.edu.vn/{self.semester_general}/course/search.php"
 
 
       def update_student_lms(self):
@@ -90,7 +93,7 @@ class UpdateStudents:
             for one_subject in list_subject_lsa:
                   # Truy cập URL ghi danh của từng môn học
                   # enrollnet.php tự động kích hoạt đồng bộ DSSV từ hệ thống QLĐT vào LMS
-                  driver.get(f"https://lms.oude.edu.vn/{settings.semester_general}/local/enrolfromextdb/enrollnet.php?id={one_subject["lms_id"]}")
+                  driver.get(f"https://lms.oude.edu.vn/{self.semester_general}/local/enrolfromextdb/enrollnet.php?id={one_subject["lms_id"]}")
 
                   try:
                         # Tìm div thông báo kết quả — text dạng: "Đã ghi danh 5/25 sinh viên vào khóa học."
@@ -139,7 +142,7 @@ class UpdateStudents:
                                                 one_subject["teacher_name"],
                                                 time.strftime('%Y-%m-%d %H:%M:%S'),  # thời điểm chạy
                                                 count_students_update[0],            # số SV được ghi danh
-                                                settings.semester_general
+                                                self.semester_general
                                           ))
                                     con.commit()
                                     print(f"Đã cập nhật môn {one_subject['subject_name']} - {one_subject['group_id']} - {one_subject['teacher_name']}: số lượng {count_students_update[0]}")

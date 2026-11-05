@@ -20,7 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from config.settings import user_lms, password_lms, captcha
-from config.settings import semester_general
+from config import runtime_settings
 from utils.api import APIHandler
 import time
 import re
@@ -38,6 +38,9 @@ class InitSelenium:
             """Khởi tạo URL đăng nhập LSA."""
             # URL trang đăng nhập LSA — dùng trong process_get_detail_lsa()
             self.url_lsa = "http://lsa.ou.edu.vn/auth/login"
+            # học kỳ hiện tại (dùng làm mặc định cho process_get_detail_lsa/process_get_detail_phdt)
+            # lấy qua runtime_settings để sửa được trên GUI, không cần build lại app mỗi học kỳ
+            self.semester_general = runtime_settings.load()["semester_general"]
 
 
       def init_selenium(self):
@@ -67,8 +70,8 @@ class InitSelenium:
             chrome_options.add_experimental_option("useAutomationExtension", False)
 
             # Khởi tạo driver với Chrome mặc định của hệ thống (không cần chỉ định service)
-            driver = webdriver.Chrome(options=chrome_options)
-            # driver = webdriver.Chrome()
+            #driver = webdriver.Chrome(options=chrome_options)
+            driver = webdriver.Chrome()
             return driver
 
 
@@ -170,8 +173,15 @@ class InitSelenium:
 
             return driver
 
-      def process_get_detail_lsa(self):
-            """Đăng nhập LSA và scraping bảng danh sách môn học trong học kỳ hiện tại.
+      def process_get_detail_lsa(self, semester=None):
+            """Đăng nhập LSA và scraping bảng danh sách môn học trong 1 học kỳ.
+
+            Tham số:
+                semester (str, tùy chọn): học kỳ cần lấy dữ liệu, ví dụ "251".
+                    Nếu không truyền (None) → mặc định dùng self.semester_general
+                    (học kỳ hiện tại). score_lms.py cần lấy dữ liệu LSA đúng theo
+                    học kỳ đang chấm điểm (semester_score_lms, có thể khác học kỳ
+                    hiện tại) nên phải truyền rõ semester khi gọi hàm này.
 
             Luồng xử lý:
               1. Đăng nhập vào LSA qua SSO
@@ -203,6 +213,9 @@ class InitSelenium:
                     - percent_student_access : % SV truy cập
                     - percent_teacher_access : % GV truy cập
             """
+            # không truyền semester → mặc định lấy học kỳ hiện tại (semester_general)
+            semester = semester or self.semester_general
+
             driver = self.login_selenium(self.url_lsa)
 
             try:
@@ -212,7 +225,7 @@ class InitSelenium:
                         EC.presence_of_element_located((By.ID, "moodlesiteid"))
                   )
                   select_type_semester = Select(dropdown_semester)
-                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS TX", semester_general]))
+                  select_type_semester.select_by_visible_text(" ".join(["[LIVE] LMS ĐTTX", semester]))
 
             # Bước 2: Hiển thị menu ẩn bằng JavaScript rồi click vào link overview
             # Menu bị ẩn bằng CSS display:none → cần execute_script để hiển thị
@@ -242,7 +255,7 @@ class InitSelenium:
                         cells = row.find_elements(By.XPATH, ".//td")
                         for idx_cell, cell in enumerate(cells):
                               # Tìm ô nào bắt đầu bằng "[251]" — đó là ô chứa thông tin môn học
-                              if cell.text.startswith("[" + semester_general + "]"):
+                              if cell.text.startswith("[" + semester + "]"):
                                     # Các ô xung quanh chứa số liệu thống kê:
                                     # idx_cell - 1 : lms_id
                                     # idx_cell + 2 : tổng số SV
@@ -258,7 +271,7 @@ class InitSelenium:
                                     # Regex parse nội dung ô môn học
                                     # Format: "[251] FINA2343 - Tên môn (Room-Nhóm) ... Giảng viên 1. Tên GV"
                                     #pattern = rf"\[{semester}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-(\w+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
-                                    pattern = rf"\[{semester_general}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-([\w,]+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
+                                    pattern = rf"\[{semester}\]\s+(\w+)\s+-\s+(.*?)\s+\((\w+)-([\w,]+)\).*?Giảng viên\s*\d+\.\s*([^\n]+)"
                                     match = re.search(pattern, cell.text, re.DOTALL)
                                     if match:
                                           temp["subject_id"] = match.group(1)    # mã môn, ví dụ "FINA2343"
@@ -317,7 +330,7 @@ class InitSelenium:
                   for i in range(3):
                         try:
                               # URL TKB của đơn vị: nhhk = "20" + semester (ví dụ "20251")
-                              driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk=20{semester_general}&madp={unit[0]}")
+                              driver.get(f"https://phdt.ou.edu.vn/admin/tidt/sodaubai/admin/tkbcoso_listtkb?nhhk=20{self.semester_general}&madp={unit[0]}")
 
                               WebDriverWait(driver, 40).until(
                                     EC.any_of(

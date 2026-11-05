@@ -24,6 +24,7 @@ from modules.init_selenium import InitSelenium
 # from db.connect_mysql import get_connection
 from config import settings
 from config import paths
+from config import runtime_settings
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
 import os
@@ -94,7 +95,8 @@ class ScoreLMS:
         "Thực tập tốt nghiệp",
         "Đồ án tốt nghiệp",
         "Thực tập tốt nghiệp - CNKTCTXD",
-        "Thực tập tốt nghiệp - QLXD"
+        "Thực tập tốt nghiệp - QLXD",
+        "Khóa luận tốt nghiệp - QLXD"
     ] 
     # các từ khóa nhiễu (menu, nút bấm...) cần loại khỏi text trước khi đưa vào model dự đoán
     NOISE_KEYWORDS = [
@@ -161,12 +163,15 @@ class ScoreLMS:
     ]
   
     def __init__(self, model_file=None, excel_file=None):
-        self.excel_file = excel_file or paths.score_lms_input_file_dir(settings.semester_score_lms, settings.score_lms_input_filename)
+        # học kỳ đang chấm điểm LMS — lấy qua runtime_settings để sửa được trên GUI
+        # (tab "Cài đặt"), không cần build lại app mỗi học kỳ
+        self.semester_score_lms = runtime_settings.load()["semester_score_lms"]
+        self.excel_file = excel_file or paths.score_lms_input_file_dir(self.semester_score_lms, settings.score_lms_input_filename)
         self.model_file = model_file or paths.model_file_dir(settings.model_filename)
-        self.link_data_ai = paths.harvested_file_dir(settings.semester_score_lms, settings.harvested_filename)
+        self.link_data_ai = paths.harvested_file_dir(self.semester_score_lms, settings.harvested_filename)
         self.training_set_file = paths.training_set_file_dir(settings.training_set_filename)
         self.existing_training_texts = self._load_existing_training_texts()
-        self.url_lms = f"https://lms.oude.edu.vn/{settings.semester_score_lms}/course/search.php"
+        self.url_lms = f"https://lms.oude.edu.vn/{self.semester_score_lms}/course/search.php"
         # tên key đặt bằng tiếng Anh cho dễ nhớ/dễ gõ, "name" là nhãn tiếng Việt hiển thị ra cột Excel
 
     def preprocess(self, text: str) -> str:
@@ -380,7 +385,9 @@ class ScoreLMS:
     def _craw_lsa_data(self, start_selenium):
         # tạo dictionary với key là mã môn học + mã nhóm + mã giảng viên, value là list chứa dữ liệu lsa
         lsa_data = {}
-        get_lsa_data = start_selenium.process_get_detail_lsa()
+        # phải truyền rõ semester_score_lms — score_lms có thể chấm 1 học kỳ khác với
+        # học kỳ hiện tại (semester_general), không được để process_get_detail_lsa tự lấy mặc định
+        get_lsa_data = start_selenium.process_get_detail_lsa(semester=self.semester_score_lms)
         for lsa_row in get_lsa_data:
             if "subject_id" not in lsa_row:
                 continue

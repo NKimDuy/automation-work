@@ -34,6 +34,7 @@ from utils.logger import setup_logger
 from utils.api import APIHandler
 from config import settings
 from config import paths
+from config import runtime_settings
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -46,8 +47,11 @@ import re
 
 class ReportPerformLMS:
       def __init__(self):
+            # học kỳ hiện tại — lấy qua runtime_settings để sửa được trên GUI (tab "Cài đặt"),
+            # không cần build lại app mỗi học kỳ
+            self.semester_general = runtime_settings.load()["semester_general"]
             # Thư mục lưu báo cáo tuần
-            self.folder_track_lms = paths.report_perform_lms_folder(settings.semester_general) 
+            self.folder_track_lms = paths.report_perform_lms_folder(self.semester_general)
             # Đường dẫn file tích lũy (các môn chưa soạn LMS, ghi thêm mỗi tuần)
             self.file_track_no_lms = os.path.join(self.folder_track_lms, settings.track_no_lms_filename)
 
@@ -186,7 +190,7 @@ class ReportPerformLMS:
 
             for unit in list_unit:
                   # Lấy danh sách môn học theo từng đơn vị và học kỳ hiện tại
-                  list_subject = api_handler.get_subject_from_api(settings.semester_general, unit[0])
+                  list_subject = api_handler.get_subject_from_api(self.semester_general, unit[0])
                   for subject in list_subject:
                         # Bỏ qua môn chưa có ngày bắt đầu TKB
                         if subject["TUNGAYTKB"] is not None:
@@ -302,7 +306,7 @@ class ReportPerformLMS:
             os.makedirs(self.folder_track_lms, exist_ok=True)  
 
             # Đường dẫn file báo cáo tuần (tên chứa khoảng ngày) 
-            name_file_report = f"BC Tình hình soạn thảo LMS HK {settings.semester_general} từ ngày ({from_day} đến ngày {to_day}).xlsx"
+            name_file_report = f"BC Tình hình soạn thảo LMS HK {self.semester_general} từ ngày ({from_day} đến ngày {to_day}).xlsx"
             file_report_lms = os.path.join(self.folder_track_lms, name_file_report)
             
             # Tạo workbook mới cho báo cáo tuần
